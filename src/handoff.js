@@ -1,30 +1,35 @@
+import { assertGithubSafe } from "./security.js";
 import { resolveTaskRecordStorage } from "./storage.js";
-import { renderTaskLog, taskLogPath, validateTaskRecord } from "./task-log.js";
+import { renderTaskRecord, taskRecordPath, validateTaskRecord } from "./task-record.js";
 
-export function buildPrBody({ summary, validation = [], issue, logUrl, branch, commit }) {
+export function buildPrBody({ summary, validation = [], issue, recordUrl, branch, commit }) {
   const lines = ["## Summary", "", summary.trim(), ""];
   if (validation.length) lines.push("## Validation", "", ...validation.map((item) => `- ${item}`), "");
-  lines.push("## Crossdock", "", `Task record: ${logUrl}`);
+  lines.push("## Crossdock", "", `Task record: ${recordUrl}`);
   if (branch) lines.push(`Branch: \`${branch}\``);
   if (commit) lines.push(`Commit: \`${commit}\``);
   if (issue) lines.push("", `Closes #${issue}`);
   return `${lines.join("\n")}\n`;
 }
 
-export function buildUpdateComment({ summary, validation = [], logUrl, commit }) {
+export function buildUpdateComment({ summary, validation = [], recordUrl, commit }) {
   const lines = ["## Crossdock branch update", "", summary.trim(), ""];
   if (validation.length) lines.push(...validation.map((item) => `- ${item}`));
   if (commit) lines.push(`- Commit: \`${commit}\``);
-  lines.push(`- Task record: ${logUrl}`);
+  lines.push(`- Task record: ${recordUrl}`);
   return `${lines.join("\n")}\n`;
 }
 
 export async function publishInitialHandoff({ github, storage, task, pr }) {
   const destination = resolveTaskRecordStorage({ github, storage });
   validateTaskRecord({ ...task, task_type: "initial", pull_request: null, parent_task_id: null });
+
+  const provisionalBody = pr.provisionalBody ?? pr.summary;
+  assertGithubSafe(provisionalBody, "pull request body");
+
   const createdPr = await github.createPullRequest(task.target_repository, {
     title: pr.title,
-    body: pr.provisionalBody ?? pr.summary,
+    body: provisionalBody,
     head: task.working_branch,
     base: task.base_branch,
     draft: pr.draft ?? false,
@@ -43,27 +48,30 @@ export async function publishExistingInitialHandoff({ github, storage, task, pr 
   validateTaskRecord(record);
   if (!record.pull_request) throw new Error("existing initial handoff requires pull_request");
 
-  const persisted = await persistTaskLog({ github, storage: destination, record });
+  const persisted = await persistTaskRecord({ github, storage: destination, record });
   const body = buildPrBody({
     summary: pr.summary,
     validation: pr.validation,
     issue: task.issue,
-    logUrl: persisted.url,
+    recordUrl: persisted.url,
     branch: task.working_branch,
     commit: task.result_commit,
   });
+  assertGithubSafe(body, "pull request body");
+
   await github.updatePullRequest(task.target_repository, record.pull_request, { body });
   const verified = await github.getPullRequest(task.target_repository, record.pull_request);
   if (!verified.body?.includes(persisted.url)) throw new Error("initial handoff verification failed: PR body does not link task record");
   await destination.verifyImmutable({ path: persisted.path, version: persisted.version, expectedContent: persisted.content });
-  return { pullRequest: verified, taskLog: persisted };
+  return { pullRequest: verified, taskRecord: persisted };
 }
 
 export async function publishUpdateHandoff({ github, storage, task, update }) {
   const destination = resolveTaskRecordStorage({ github, storage });
   const record = { ...task, task_type: "update" };
-  const persisted = await persistTaskLog({ github, storage: destination, record });
-  const commentBody = buildUpdateComment({ summary: update.summary, validation: update.validation, logUrl: persisted.url, commit: task.result_commit });
+  const persisted = await persistTaskRecord({ github, storage: destination, record });
+  const commentBody = buildUpdateComment({ summary: update.summary, validation: update.validation, recordUrl: persisted.url, commit: task.result_commit });
+  assertGithubSafe(commentBody, "pull request comment");
 
   const before = await github.getIssueComments(task.target_repository, task.pull_request);
   const linked = before.filter((item) => typeof item.body === "string" && item.body.includes(persisted.url));
@@ -77,13 +85,13 @@ export async function publishUpdateHandoff({ github, storage, task, update }) {
   const verifiedComment = comments.find((item) => item.id === comment.id && item.body === commentBody);
   if (!verifiedComment) throw new Error("update handoff verification failed: durable PR comment does not match expected task record linkage");
   await destination.verifyImmutable({ path: persisted.path, version: persisted.version, expectedContent: persisted.content });
-  return { comment: verifiedComment, taskLog: persisted };
+  return { comment: verifiedComment, taskRecord: persisted };
 }
 
-export async function persistTaskLog({ github, storage, record }) {
+export async function persistTaskRecord({ github, storage, record }) {
   const destination = resolveTaskRecordStorage({ github, storage });
-  const path = taskLogPath(record);
-  const content = renderTaskLog(record);
+  const path = taskRecordPath(record);
+  const content = renderTaskRecord(record);
   const persisted = await destination.persistImmutable({
     path,
     content,
