@@ -22,13 +22,37 @@ export async function publishInitialHandoff({ github, storage, task, pr }) {
   const destination = requireStorage(storage);
   validateTaskRecord({ ...task, task_type: "initial", pull_request: null, parent_task_id: null });
   const createdPr = await github.createPullRequest(task.target_repository, {
-    title: pr.title, body: pr.provisionalBody ?? pr.summary, head: task.working_branch, base: task.base_branch, draft: pr.draft ?? false,
+    title: pr.title,
+    body: pr.provisionalBody ?? pr.summary,
+    head: task.working_branch,
+    base: task.base_branch,
+    draft: pr.draft ?? false,
   });
-  const record = { ...task, task_type: "initial", pull_request: createdPr.number, parent_task_id: null };
+  return publishExistingInitialHandoff({
+    github,
+    storage: destination,
+    task: { ...task, pull_request: createdPr.number },
+    pr,
+  });
+}
+
+export async function publishExistingInitialHandoff({ github, storage, task, pr }) {
+  const destination = requireStorage(storage);
+  const record = { ...task, task_type: "initial", parent_task_id: null };
+  validateTaskRecord(record);
+  if (!record.pull_request) throw new Error("existing initial handoff requires pull_request");
+
   const persisted = await persistTaskLog({ github, storage: destination, record });
-  const body = buildPrBody({ summary: pr.summary, validation: pr.validation, issue: task.issue, logUrl: persisted.url, branch: task.working_branch, commit: task.result_commit });
-  await github.updatePullRequest(task.target_repository, createdPr.number, { body });
-  const verified = await github.getPullRequest(task.target_repository, createdPr.number);
+  const body = buildPrBody({
+    summary: pr.summary,
+    validation: pr.validation,
+    issue: task.issue,
+    logUrl: persisted.url,
+    branch: task.working_branch,
+    commit: task.result_commit,
+  });
+  await github.updatePullRequest(task.target_repository, record.pull_request, { body });
+  const verified = await github.getPullRequest(task.target_repository, record.pull_request);
   if (!verified.body?.includes(persisted.url)) throw new Error("initial handoff verification failed: PR body does not link task record");
   await verifyTaskLog({ github, storage: destination, path: persisted.path, ref: persisted.commitSha, expectedContent: persisted.content });
   return { pullRequest: verified, taskLog: persisted };
