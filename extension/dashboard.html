@@ -28,6 +28,21 @@
       </label>
       <label class="wide">Task-record repository <input id="storage-repository" placeholder="private owner/repo" autocomplete="off"></label>
       <label>Task-record branch <input id="storage-branch" value="main" autocomplete="off"></label>
+      <label>Prompt evidence
+        <select id="prompt-evidence">
+          <option value="full">Store full prompt</option>
+          <option value="hash">Store hash only</option>
+          <option value="omit">Store no prompt evidence</option>
+        </select>
+      </label>
+      <label>Report evidence
+        <select id="report-evidence">
+          <option value="full">Store full report</option>
+          <option value="hash">Store hash only</option>
+          <option value="omit">Store no report evidence</option>
+        </select>
+      </label>
+      <p class="wide">Evidence settings control durable task records. Hash-only keeps an integrity digest without plaintext. Omit stores neither plaintext nor digest for that evidence class.</p>
       <label class="wide">PR / update summary <textarea id="summary" rows="3" placeholder="What changed and why?"></textarea></label>
       <label class="wide">Validation <textarea id="validation" rows="3" placeholder="One result per line"></textarea></label>
     </section>
