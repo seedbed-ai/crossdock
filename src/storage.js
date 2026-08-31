@@ -1,3 +1,5 @@
+import { assertGithubSafe } from "./security.js";
+
 export const TASK_RECORD_STORAGE_ADAPTER = "crossdock.task-record-storage/v1";
 
 export function createGitHubTaskRecordStorage({ github, repository, branch }) {
@@ -13,6 +15,8 @@ export function createGitHubTaskRecordStorage({ github, repository, branch }) {
 
     async persistImmutable({ path, content, message }) {
       requireRecordInput(path, content, message);
+      assertGithubSafe(content, "task record");
+
       try {
         const response = await github.createFile(repository, path, content, message, branch);
         const commitSha = response.commit?.sha;
