@@ -25,6 +25,7 @@ export function createGitHubTaskRecordStorage({ github, repository, branch }) {
       const existing = await github.getFile(repository, path, branch);
       const actual = decodeGitHubFile(existing, "task-record retry recovery");
       if (actual !== content) throw new Error("task-record retry conflict: existing immutable record has different content");
+      if (typeof github.getLatestCommitForPath !== "function") throw new Error("GitHub client must implement getLatestCommitForPath() for task-record retry recovery");
 
       const commit = await github.getLatestCommitForPath(repository, path, branch);
       return githubResult({ repository, path, content, commitSha: commit.sha });
@@ -75,7 +76,7 @@ function githubResult({ repository, path, content, commitSha }) {
 
 function requireGithub(github) {
   if (!github || typeof github !== "object") throw new Error("GitHub client is required for GitHub task-record storage");
-  for (const method of ["createFile", "getFile", "getLatestCommitForPath"]) {
+  for (const method of ["createFile", "getFile"]) {
     if (typeof github[method] !== "function") throw new Error(`GitHub client must implement ${method}()`);
   }
 }
