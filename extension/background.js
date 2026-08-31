@@ -31,13 +31,13 @@ async function handleMessage(message) {
       const tab = await findChatGptTab(true);
       const beforeTabs = new Set(await matchingPrTabUrls(message.targetRepository));
       const beforePage = new Set((await sendToTab(tab.id, { type: "crossdock.findPrUrls", targetRepository: message.targetRepository })).prUrls);
-      const prepared = await sendToTab(tab.id, { type: "crossdock.prepareCreatePr" });
+      const prepared = await sendToTab(tab.id, { type: "crossdock.prepareCreatePr", captureReport: message.captureReport !== false });
       const prUrl = await waitForPrUrl({ tabId: tab.id, targetRepository: message.targetRepository, beforeTabs, beforePage });
       return { ...prepared, prUrl };
     }
     case "crossdock.applyBranchUpdate": {
       const tab = await findChatGptTab(true);
-      return sendToTab(tab.id, { type: "crossdock.prepareBranchUpdate" });
+      return sendToTab(tab.id, { type: "crossdock.prepareBranchUpdate", captureReport: message.captureReport !== false });
     }
     case "crossdock.openChatGPT": return activateOrCreate(CHATGPT_URL, false);
     case "crossdock.openCodex": return activateOrCreate(CODEX_URL, true);

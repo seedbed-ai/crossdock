@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const fields = ["repository", "issue", "pull-request", "handoff-mode", "storage-repository", "storage-branch", "summary", "validation", "prompt"];
+const fields = ["repository", "issue", "pull-request", "handoff-mode", "storage-repository", "storage-branch", "prompt-evidence", "report-evidence", "summary", "validation", "prompt"];
 const POLL_MS = 5000;
 let taskState = null;
 let monitoring = false;
@@ -27,6 +27,7 @@ $("submit").addEventListener("click", run(async () => {
   if (!prompt.trim()) throw new Error("capture a prompt first");
   const repository = requireRepository();
   const storage = requireStorage();
+  const evidencePolicy = readEvidencePolicy();
   const prNumber = parseOptionalPrNumber();
   const mode = prNumber ? "update" : "initial";
   const initialSnapshot = mode === "update" ? await publish("/pr/snapshot", { target_repository: repository, pull_request: prNumber }) : null;
@@ -37,6 +38,7 @@ $("submit").addEventListener("click", run(async () => {
     prompt,
     mode,
     handoff_mode: $("handoff-mode").value,
+    evidence_policy: evidencePolicy,
     repository,
     storage,
     pull_request: prNumber,
@@ -90,7 +92,11 @@ async function finalizeInitial() {
   if (!["running", "ready"].includes(taskState.phase)) throw new Error(`initial task cannot finalize from phase ${taskState.phase}`);
   taskState.phase = "finalizing"; await saveTaskState(); setStatus("Creating PR and recording task provenance…");
   try {
-    const result = await send({ type: "crossdock.createPrAndInspect", targetRepository: taskState.repository });
+    const result = await send({
+      type: "crossdock.createPrAndInspect",
+      targetRepository: taskState.repository,
+      captureReport: taskState.evidence_policy.report !== "omit",
+    });
     const prNumber = parsePrNumber(result.prUrl, taskState.repository);
     $("pull-request").value = String(prNumber);
     await publish("/handoff/initial", { storage: taskState.storage, task: buildTask({ repository: taskState.repository, prNumber, result }), pr: buildDescription() });
@@ -103,7 +109,10 @@ async function finalizeUpdate() {
   if (!["running", "ready"].includes(taskState.phase)) throw new Error(`update task cannot finalize from phase ${taskState.phase}`);
   taskState.phase = "finalizing"; await saveTaskState(); setStatus("Updating the PR branch and verifying the remote head…");
   try {
-    const result = await send({ type: "crossdock.applyBranchUpdate" });
+    const result = await send({
+      type: "crossdock.applyBranchUpdate",
+      captureReport: taskState.evidence_policy.report !== "omit",
+    });
     taskState.phase = "branch-update-clicked";
     taskState.final_task_url = result.taskUrl;
     taskState.final_report = result.report;
@@ -152,7 +161,7 @@ async function completeTask(prNumber) {
 
 function buildTask({ repository, prNumber, result }) {
   const issueText = $("issue").value.trim();
-  return {
+  const record = {
     task_id: taskState.task_id,
     created_at: taskState.created_at,
     completed_at: new Date().toISOString(),
@@ -160,9 +169,11 @@ function buildTask({ repository, prNumber, result }) {
     pull_request: prNumber,
     issue: issueText ? Number(issueText) : null,
     agent_task_url: result.taskUrl,
-    prompt: taskState.prompt,
-    report: result.report,
+    evidence_policy: taskState.evidence_policy,
   };
+  if (taskState.evidence_policy.prompt !== "omit") record.prompt = taskState.prompt;
+  if (taskState.evidence_policy.report !== "omit") record.report = result.report;
+  return record;
 }
 
 function buildDescription() {
@@ -170,6 +181,14 @@ function buildDescription() {
     summary: $("summary").value.trim() || "Completed the delegated task.",
     validation: $("validation").value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
   };
+}
+
+function readEvidencePolicy() {
+  const prompt = $("prompt-evidence").value;
+  const report = $("report-evidence").value;
+  const allowed = new Set(["full", "hash", "omit"]);
+  if (!allowed.has(prompt) || !allowed.has(report)) throw new Error("invalid evidence policy");
+  return { prompt, report };
 }
 
 function requireStorage() {

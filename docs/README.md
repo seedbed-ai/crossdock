@@ -5,8 +5,9 @@ Crossdock is in early public development. These documents describe the intended 
 ## Start here
 
 - [`getting-started.md`](getting-started.md) — current development setup and project status.
+- [`testing/public-live-test.md`](testing/public-live-test.md) — provider-neutral desktop live-test steps for public testers.
 - [`concepts/workflow.md`](concepts/workflow.md) — task lifecycle from prompt through PR handoff.
-- [`concepts/task-records.md`](concepts/task-records.md) — durable prompt/report provenance.
+- [`concepts/task-records.md`](concepts/task-records.md) — durable task metadata and configurable evidence retention.
 - [`concepts/adapters.md`](concepts/adapters.md) — provider boundary model.
 - [`configuration/handoff-mode.md`](configuration/handoff-mode.md) — automatic vs review-before-handoff direction.
 - [`configuration/task-log-storage.md`](configuration/task-log-storage.md) — storage privacy and configuration.
