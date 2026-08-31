@@ -61,7 +61,16 @@ async function monitorTask() {
   monitoring = true;
   try {
     while (taskState) {
-      if (taskState.phase === "branch-update-clicked") { await finishUpdateAfterRemoteChange(); continue; }
+      if (taskState.phase === "branch-update-clicked") {
+        try {
+          await finishUpdateAfterRemoteChange();
+          continue;
+        } catch (error) {
+          setStatus(`Waiting for GitHub branch update: ${error.message}. Will retry.`, true);
+          await sleep(POLL_MS);
+          continue;
+        }
+      }
       if (!["running", "ready"].includes(taskState.phase)) return;
       if (taskState.phase === "ready" && taskState.handoff_mode === "review") return;
 
@@ -119,7 +128,12 @@ async function finalizeUpdate() {
     await saveTaskState();
     await finishUpdateAfterRemoteChange();
   } catch (error) {
-    if (taskState?.phase === "finalizing") { taskState.phase = "ready"; await saveTaskState(); }
+    if (taskState?.phase === "finalizing") {
+      taskState.phase = "ready";
+      await saveTaskState();
+    } else if (taskState?.phase === "branch-update-clicked") {
+      void monitorTask();
+    }
     throw error;
   }
 }
