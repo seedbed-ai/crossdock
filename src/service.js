@@ -1,4 +1,4 @@
-import { publishInitialHandoff, publishUpdateHandoff } from "./handoff.js";
+import { publishExistingInitialHandoff, publishUpdateHandoff } from "./handoff.js";
 
 export async function dispatchHandoff({ method, path, body, github }) {
   if (method === "GET" && path === "/health") return { status: 200, body: { ok: true } };
@@ -10,16 +10,7 @@ export async function dispatchHandoff({ method, path, body, github }) {
       target_repository: body.target_repository,
       pull_request: body.pull_request,
     });
-    return {
-      status: 200,
-      body: {
-        repository: task.target_repository,
-        pull_request: task.pull_request,
-        base_branch: task.base_branch,
-        working_branch: task.working_branch,
-        head_sha: task.result_commit,
-      },
-    };
+    return { status: 200, body: { repository: task.target_repository, pull_request: task.pull_request, base_branch: task.base_branch, working_branch: task.working_branch, head_sha: task.result_commit } };
   }
 
   if (path === "/handoff/initial" || path === "/handoff/update") {
@@ -29,7 +20,7 @@ export async function dispatchHandoff({ method, path, body, github }) {
     const task = await hydrateTaskFromPullRequest(github, body.task);
 
     if (path === "/handoff/initial") {
-      const result = await publishInitialHandoff({ github, storage: body.storage, task, pr: body.pr });
+      const result = await publishExistingInitialHandoff({ github, storage: body.storage, task, pr: body.pr });
       return { status: 200, body: summarizeInitial(result) };
     }
 
