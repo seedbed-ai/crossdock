@@ -61,6 +61,16 @@ async function monitorTask() {
   monitoring = true;
   try {
     while (taskState) {
+      if (taskState.phase === "pr-created") {
+        try {
+          await finishInitialAfterPrCreated();
+          continue;
+        } catch (error) {
+          setStatus(`Finishing created PR handoff: ${error.message}. Will retry.`, true);
+          await sleep(POLL_MS);
+          continue;
+        }
+      }
       if (taskState.phase === "branch-update-clicked") {
         try {
           await finishUpdateAfterRemoteChange();
@@ -99,7 +109,9 @@ async function monitorTask() {
 async function finalizeInitial() {
   requireTaskState("initial");
   if (!["running", "ready"].includes(taskState.phase)) throw new Error(`initial task cannot finalize from phase ${taskState.phase}`);
-  taskState.phase = "finalizing"; await saveTaskState(); setStatus("Creating PR and recording task provenance…");
+  taskState.phase = "finalizing";
+  await saveTaskState();
+  setStatus("Creating PR and recording task provenance…");
   try {
     const result = await send({
       type: "crossdock.createPrAndInspect",
@@ -108,9 +120,40 @@ async function finalizeInitial() {
     });
     const prNumber = parsePrNumber(result.prUrl, taskState.repository);
     $("pull-request").value = String(prNumber);
-    await publish("/handoff/initial", { storage: taskState.storage, task: buildTask({ repository: taskState.repository, prNumber, result }), pr: buildDescription() });
-    await completeTask(prNumber); await persist(); setStatus(`Initial PR finalized: ${result.prUrl}`);
-  } catch (error) { taskState.phase = "ready"; await saveTaskState(); throw error; }
+    taskState.phase = "pr-created";
+    taskState.pull_request = prNumber;
+    taskState.final_pr_url = result.prUrl;
+    taskState.final_task_url = result.taskUrl;
+    taskState.final_report = result.report;
+    await saveTaskState();
+    await persist();
+    await finishInitialAfterPrCreated();
+  } catch (error) {
+    if (taskState?.phase === "finalizing") {
+      taskState.phase = "ready";
+      await saveTaskState();
+    } else if (taskState?.phase === "pr-created") {
+      void monitorTask();
+    }
+    throw error;
+  }
+}
+
+async function finishInitialAfterPrCreated() {
+  requireTaskState("initial");
+  if (taskState.phase !== "pr-created") return;
+  if (!taskState.pull_request || !taskState.final_pr_url || !taskState.final_task_url) throw new Error("created PR recovery state is incomplete");
+  const result = { taskUrl: taskState.final_task_url, report: taskState.final_report };
+  await publish("/handoff/initial", {
+    storage: taskState.storage,
+    task: buildTask({ repository: taskState.repository, prNumber: taskState.pull_request, result }),
+    pr: buildDescription(),
+  });
+  const prNumber = taskState.pull_request;
+  const prUrl = taskState.final_pr_url;
+  await completeTask(prNumber);
+  await persist();
+  setStatus(`Initial PR finalized: ${prUrl}`);
 }
 
 async function finalizeUpdate() {
