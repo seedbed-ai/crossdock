@@ -11,8 +11,8 @@ async function handleMessage(message) {
     case "crossdock.submitCodex": return submitCodexPrompt(message.prompt);
     case "crossdock.inspectCodex": return inspectCodexTask();
     case "crossdock.findPrUrls": return { prUrls: findPullRequestLinks(message.targetRepository) };
-    case "crossdock.prepareCreatePr": return prepareCreatePr();
-    case "crossdock.prepareBranchUpdate": return prepareBranchUpdate();
+    case "crossdock.prepareCreatePr": return prepareCreatePr(message.captureReport !== false);
+    case "crossdock.prepareBranchUpdate": return prepareBranchUpdate(message.captureReport !== false);
     default: throw new Error(`unsupported content message: ${message.type}`);
   }
 }
@@ -38,16 +38,18 @@ function inspectCodexTask() {
   return { taskUrl: location.href, createPrAvailable: Boolean(findButton(["Create PR"], false)), updateBranchAvailable: Boolean(findButton(["Update branch"], false)) };
 }
 
-function prepareCreatePr() {
+function prepareCreatePr(captureReport = true) {
   requireCodexPage();
-  const result = { taskUrl: location.href, report: captureCodexReport() };
+  const result = { taskUrl: location.href };
+  if (captureReport) result.report = captureCodexReport();
   findButton(["Create PR"], true).click();
   return result;
 }
 
-function prepareBranchUpdate() {
+function prepareBranchUpdate(captureReport = true) {
   requireCodexPage();
-  const result = { taskUrl: location.href, report: captureCodexReport() };
+  const result = { taskUrl: location.href };
+  if (captureReport) result.report = captureCodexReport();
   findButton(["Update branch"], true).click();
   return result;
 }
