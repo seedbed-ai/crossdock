@@ -29,11 +29,25 @@ async function handleMessage(message) {
     }
     case "crossdock.createPrAndInspect": {
       const tab = await findChatGptTab(true);
-      const beforeTabs = new Set(await matchingPrTabUrls(message.targetRepository));
-      const beforePage = new Set((await sendToTab(tab.id, { type: "crossdock.findPrUrls", targetRepository: message.targetRepository })).prUrls);
+      const beforeTabs = (await matchingPrTabUrls(message.targetRepository)).map((url) => canonicalPrUrl(url, message.targetRepository));
+      const beforePage = (await sendToTab(tab.id, { type: "crossdock.findPrUrls", targetRepository: message.targetRepository })).prUrls
+        .map((url) => canonicalPrUrl(url, message.targetRepository));
+      const discovery = { beforeTabs, beforePage };
       const prepared = await sendToTab(tab.id, { type: "crossdock.prepareCreatePr", captureReport: message.captureReport !== false });
-      const prUrl = await waitForPrUrl({ tabId: tab.id, targetRepository: message.targetRepository, beforeTabs, beforePage });
-      return { ...prepared, prUrl };
+      let prUrl = null;
+      let discoveryError = null;
+      try {
+        prUrl = await waitForPrUrl({ tabId: tab.id, targetRepository: message.targetRepository, discovery });
+      } catch (error) {
+        discoveryError = error.message;
+      }
+      return { ...prepared, prUrl, discovery, discoveryError, uncertain: !prUrl };
+    }
+    case "crossdock.recoverCreatedPr": {
+      const tab = await findChatGptTab(true);
+      const candidates = await findNewPrUrls({ tabId: tab.id, targetRepository: message.targetRepository, discovery: message.discovery });
+      if (candidates.length > 1) throw new Error(`created PR recovery is ambiguous; found ${candidates.length} new target-repository PR URLs`);
+      return { prUrl: candidates[0] ?? null };
     }
     case "crossdock.applyBranchUpdate": {
       const tab = await findChatGptTab(true);
@@ -84,20 +98,49 @@ async function activateOrCreate(url, codex) {
   return chrome.tabs.create({ url, active: true });
 }
 
-async function waitForPrUrl({ tabId, targetRepository, beforeTabs, beforePage }) {
+async function waitForPrUrl({ tabId, targetRepository, discovery }) {
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
-    const tabUrls = await matchingPrTabUrls(targetRepository);
-    const newTabUrl = tabUrls.find((url) => !beforeTabs.has(url));
-    if (newTabUrl) return newTabUrl;
-    try {
-      const current = await sendToTab(tabId, { type: "crossdock.findPrUrls", targetRepository });
-      const newPageUrl = current.prUrls.find((url) => !beforePage.has(url));
-      if (newPageUrl) return newPageUrl;
-    } catch {}
+    const candidates = await findNewPrUrls({ tabId, targetRepository, discovery });
+    if (candidates.length > 1) throw new Error(`created PR discovery is ambiguous; found ${candidates.length} new target-repository PR URLs`);
+    if (candidates.length === 1) return candidates[0];
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  throw new Error("timed out waiting for coding-agent-created PR URL");
+  return null;
+}
+
+async function findNewPrUrls({ tabId, targetRepository, discovery }) {
+  if (!discovery || !Array.isArray(discovery.beforeTabs) || !Array.isArray(discovery.beforePage)) {
+    throw new Error("created PR recovery baseline is missing");
+  }
+  const beforeTabs = new Set(discovery.beforeTabs.map((url) => canonicalPrUrl(url, targetRepository)));
+  const beforePage = new Set(discovery.beforePage.map((url) => canonicalPrUrl(url, targetRepository)));
+  const candidates = new Set(
+    (await matchingPrTabUrls(targetRepository))
+      .map((url) => canonicalPrUrl(url, targetRepository))
+      .filter((url) => !beforeTabs.has(url)),
+  );
+  try {
+    const current = await sendToTab(tabId, { type: "crossdock.findPrUrls", targetRepository });
+    for (const value of current.prUrls) {
+      const url = canonicalPrUrl(value, targetRepository);
+      if (!beforePage.has(url)) candidates.add(url);
+    }
+  } catch {
+    // Provider navigation may temporarily make the content script unavailable; GitHub tabs remain valid evidence.
+  }
+  return [...candidates];
+}
+
+function canonicalPrUrl(value, targetRepository) {
+  if (typeof value !== "string") throw new Error("PR URL must be a string");
+  if (typeof targetRepository !== "string" || !/^[^/\s]+\/[^/\s]+$/.test(targetRepository)) throw new Error("target repository must be owner/repo");
+  const parsed = new URL(value);
+  if (parsed.origin !== "https://github.com") throw new Error("PR URL must use github.com");
+  const escaped = targetRepository.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = parsed.pathname.match(new RegExp(`^/${escaped}/pull/(\\d+)/?$`));
+  if (!match) throw new Error("PR URL does not identify the target repository");
+  return `https://github.com/${targetRepository}/pull/${match[1]}`;
 }
 
 async function matchingPrTabUrls(targetRepository) {
