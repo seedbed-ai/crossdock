@@ -4,14 +4,14 @@ Task records can contain private source context, prompts, and execution reports.
 
 ## Adapter boundary
 
-Crossdock now routes task-record persistence through an implementation-level storage adapter contract identified as `crossdock.task-record-storage/v1`.
+Crossdock routes task-record persistence through an implementation-level storage adapter contract identified as `crossdock.task-record-storage/v1`.
 
 A conforming adapter must provide:
 
 - `persistImmutable(...)`, returning the exact path/content, a non-empty immutable version identifier, and a durable URL; and
 - `verifyImmutable(...)`, independently re-reading/verifying the expected content for that immutable version.
 
-The handoff core validates the adapter result before it links the record from a pull request. An adapter is therefore responsible for its persistence/addressing mechanics, while Crossdock's handoff layer remains responsible for task-record rendering and PR linkage.
+The handoff core validates the adapter result before it links the record from a pull request. An adapter is responsible for persistence/addressing mechanics, while Crossdock's handoff layer remains responsible for task-record rendering and PR linkage.
 
 ## GitHub adapter
 
@@ -27,7 +27,7 @@ The first implemented adapter is GitHub-backed storage configured with:
 
 For compatibility, `type` currently defaults to `github` when omitted.
 
-GitHub persistence is create-only. If a retry finds the path already present, Crossdock accepts it only when the existing remote bytes exactly match the expected immutable record, then recovers the commit that introduced/last addressed that path for the durable link. Conflicting content fails closed.
+GitHub persistence is create-only. If a retry finds the path already present, Crossdock accepts it only when the existing remote bytes exactly match the expected immutable record, then recovers the commit for the durable link. Conflicting content fails closed.
 
 ## Future adapters
 
