@@ -9,7 +9,8 @@ Crossdock is in early public development. These documents describe the intended 
 - [`concepts/workflow.md`](concepts/workflow.md) — task lifecycle from prompt through PR handoff.
 - [`concepts/task-records.md`](concepts/task-records.md) — durable task metadata and configurable evidence retention.
 - [`concepts/adapters.md`](concepts/adapters.md) — provider boundary model.
-- [`configuration/handoff-mode.md`](configuration/handoff-mode.md) — automatic vs review-before-handoff direction.
+- [`configuration/model.md`](configuration/model.md) — shared configuration schema, scopes, precedence, validation, and user-agency semantics.
+- [`configuration/handoff-mode.md`](configuration/handoff-mode.md) — automatic vs review-before-handoff behavior.
 - [`configuration/task-log-storage.md`](configuration/task-log-storage.md) — storage privacy and configuration.
 - [`architecture/overview.md`](architecture/overview.md) — evolving technical architecture.
 - [`architecture/security-boundaries.md`](architecture/security-boundaries.md) — public source, browser sessions, credentials, and task data.
