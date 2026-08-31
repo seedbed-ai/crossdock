@@ -40,11 +40,11 @@ export async function hydrateTaskFromPullRequest(github, task) {
 }
 
 function summarizeInitial(result) {
-  return { pull_request: result.pullRequest.number, pull_request_url: result.pullRequest.html_url ?? result.pullRequest.url ?? null, task_record_url: result.taskLog.url };
+  return { pull_request: result.pullRequest.number, pull_request_url: result.pullRequest.html_url ?? result.pullRequest.url ?? null, task_record_url: result.taskRecord.url };
 }
 
 function summarizeUpdate(result) {
-  return { comment_id: result.comment.id, comment_url: result.comment.html_url ?? result.comment.url ?? null, task_record_url: result.taskLog.url };
+  return { comment_id: result.comment.id, comment_url: result.comment.html_url ?? result.comment.url ?? null, task_record_url: result.taskRecord.url };
 }
 
 function requireObject(value, label) {
