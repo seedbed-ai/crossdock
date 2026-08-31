@@ -29,12 +29,19 @@ async function handleMessage(message) {
     }
     case "crossdock.createPrAndInspect": {
       const tab = await findChatGptTab(true);
-      const beforeTabs = await matchingPrTabUrls(message.targetRepository);
-      const beforePage = (await sendToTab(tab.id, { type: "crossdock.findPrUrls", targetRepository: message.targetRepository })).prUrls;
+      const beforeTabs = (await matchingPrTabUrls(message.targetRepository)).map((url) => canonicalPrUrl(url, message.targetRepository));
+      const beforePage = (await sendToTab(tab.id, { type: "crossdock.findPrUrls", targetRepository: message.targetRepository })).prUrls
+        .map((url) => canonicalPrUrl(url, message.targetRepository));
       const discovery = { beforeTabs, beforePage };
       const prepared = await sendToTab(tab.id, { type: "crossdock.prepareCreatePr", captureReport: message.captureReport !== false });
-      const prUrl = await waitForPrUrl({ tabId: tab.id, targetRepository: message.targetRepository, discovery });
-      return { ...prepared, prUrl, discovery, uncertain: !prUrl };
+      let prUrl = null;
+      let discoveryError = null;
+      try {
+        prUrl = await waitForPrUrl({ tabId: tab.id, targetRepository: message.targetRepository, discovery });
+      } catch (error) {
+        discoveryError = error.message;
+      }
+      return { ...prepared, prUrl, discovery, discoveryError, uncertain: !prUrl };
     }
     case "crossdock.recoverCreatedPr": {
       const tab = await findChatGptTab(true);
@@ -106,16 +113,34 @@ async function findNewPrUrls({ tabId, targetRepository, discovery }) {
   if (!discovery || !Array.isArray(discovery.beforeTabs) || !Array.isArray(discovery.beforePage)) {
     throw new Error("created PR recovery baseline is missing");
   }
-  const beforeTabs = new Set(discovery.beforeTabs);
-  const beforePage = new Set(discovery.beforePage);
-  const candidates = new Set((await matchingPrTabUrls(targetRepository)).filter((url) => !beforeTabs.has(url)));
+  const beforeTabs = new Set(discovery.beforeTabs.map((url) => canonicalPrUrl(url, targetRepository)));
+  const beforePage = new Set(discovery.beforePage.map((url) => canonicalPrUrl(url, targetRepository)));
+  const candidates = new Set(
+    (await matchingPrTabUrls(targetRepository))
+      .map((url) => canonicalPrUrl(url, targetRepository))
+      .filter((url) => !beforeTabs.has(url)),
+  );
   try {
     const current = await sendToTab(tabId, { type: "crossdock.findPrUrls", targetRepository });
-    for (const url of current.prUrls) if (!beforePage.has(url)) candidates.add(url);
+    for (const value of current.prUrls) {
+      const url = canonicalPrUrl(value, targetRepository);
+      if (!beforePage.has(url)) candidates.add(url);
+    }
   } catch {
     // Provider navigation may temporarily make the content script unavailable; GitHub tabs remain valid evidence.
   }
   return [...candidates];
+}
+
+function canonicalPrUrl(value, targetRepository) {
+  if (typeof value !== "string") throw new Error("PR URL must be a string");
+  if (typeof targetRepository !== "string" || !/^[^/\s]+\/[^/\s]+$/.test(targetRepository)) throw new Error("target repository must be owner/repo");
+  const parsed = new URL(value);
+  if (parsed.origin !== "https://github.com") throw new Error("PR URL must use github.com");
+  const escaped = targetRepository.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = parsed.pathname.match(new RegExp(`^/${escaped}/pull/(\\d+)/?$`));
+  if (!match) throw new Error("PR URL does not identify the target repository");
+  return `https://github.com/${targetRepository}/pull/${match[1]}`;
 }
 
 async function matchingPrTabUrls(targetRepository) {
