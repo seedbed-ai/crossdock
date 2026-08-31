@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { persistTaskLog, publishInitialHandoff, publishUpdateHandoff } from "../src/handoff.js";
+import { TASK_RECORD_STORAGE_ADAPTER } from "../src/storage.js";
 
 const storage = { repository: "example/private-task-records", branch: "main" };
 function task(overrides = {}) { return { task_id: "task-001", created_at: "2026-08-31T20:00:00Z", completed_at: "2026-08-31T20:05:00Z", target_repository: "example/project", base_branch: "main", working_branch: "crossdock/task-001", issue: 123, agent_task_url: "https://example.invalid/tasks/task-001", result_commit: "0123456789abcdef0123456789abcdef01234567", prompt: "Implement the bounded task.", report: "## Summary\n\nImplemented and validated.", ...overrides }; }
@@ -31,6 +32,28 @@ function mockGithub() {
     async getFile(repository, path, ref) { calls.push(["getFile", repository, path, ref]); return { sha: "blob123", content: Buffer.from(storedContent ?? "", "utf8").toString("base64") }; },
     async addIssueComment(repository, number, body) { calls.push(["addIssueComment", repository, number, body]); storedComment = { id: 9, body }; return storedComment; },
     async getIssueComments(repository, number) { calls.push(["getIssueComments", repository, number]); return storedComment ? [storedComment] : []; },
+  };
+}
+
+function memoryStorage() {
+  let stored = null;
+  const calls = [];
+  return {
+    adapter: TASK_RECORD_STORAGE_ADAPTER,
+    type: "memory-test",
+    calls,
+    async persistImmutable({ path, content, message }) {
+      calls.push(["persistImmutable", path, message]);
+      stored = { path, content, version: "memory-v1", url: `memory://records/${encodeURIComponent(path)}` };
+      return stored;
+    },
+    async verifyImmutable({ path, version, expectedContent }) {
+      calls.push(["verifyImmutable", path, version]);
+      assert.equal(path, stored.path);
+      assert.equal(version, stored.version);
+      assert.equal(expectedContent, stored.content);
+      return true;
+    },
   };
 }
 
@@ -98,4 +121,18 @@ test("update retry fails closed on conflicting comment for the same task record"
   github.setStoredCommentBody(`${first.comment.body}\nconflicting edit\n`);
   await assert.rejects(publishUpdateHandoff({ github, storage, task: updateTask, update }), /existing task-record comment has different content/);
   assert.equal(github.calls.filter(([name]) => name === "addIssueComment").length, 1);
+});
+
+test("handoff accepts a conforming non-GitHub task-record storage adapter", async () => {
+  const github = mockGithub();
+  const adapter = memoryStorage();
+  const result = await publishUpdateHandoff({
+    github,
+    storage: adapter,
+    task: task({ task_id: "task-memory", pull_request: 77, parent_task_id: "task-001" }),
+    update: { summary: "Stored outside GitHub.", validation: [] },
+  });
+  assert.match(result.taskLog.url, /^memory:\/\/records\//);
+  assert.deepEqual(adapter.calls.map(([name]) => name), ["persistImmutable", "verifyImmutable"]);
+  assert.ok(!github.calls.some(([name]) => name === "createFile" || name === "getFile"));
 });

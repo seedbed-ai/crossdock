@@ -1,3 +1,4 @@
+import { resolveTaskRecordStorage } from "./storage.js";
 import { renderTaskLog, taskLogPath, validateTaskRecord } from "./task-log.js";
 
 export function buildPrBody({ summary, validation = [], issue, logUrl, branch, commit }) {
@@ -19,7 +20,7 @@ export function buildUpdateComment({ summary, validation = [], logUrl, commit })
 }
 
 export async function publishInitialHandoff({ github, storage, task, pr }) {
-  const destination = requireStorage(storage);
+  const destination = resolveTaskRecordStorage({ github, storage });
   validateTaskRecord({ ...task, task_type: "initial", pull_request: null, parent_task_id: null });
   const createdPr = await github.createPullRequest(task.target_repository, {
     title: pr.title,
@@ -37,7 +38,7 @@ export async function publishInitialHandoff({ github, storage, task, pr }) {
 }
 
 export async function publishExistingInitialHandoff({ github, storage, task, pr }) {
-  const destination = requireStorage(storage);
+  const destination = resolveTaskRecordStorage({ github, storage });
   const record = { ...task, task_type: "initial", parent_task_id: null };
   validateTaskRecord(record);
   if (!record.pull_request) throw new Error("existing initial handoff requires pull_request");
@@ -54,12 +55,12 @@ export async function publishExistingInitialHandoff({ github, storage, task, pr 
   await github.updatePullRequest(task.target_repository, record.pull_request, { body });
   const verified = await github.getPullRequest(task.target_repository, record.pull_request);
   if (!verified.body?.includes(persisted.url)) throw new Error("initial handoff verification failed: PR body does not link task record");
-  await verifyTaskLog({ github, storage: destination, path: persisted.path, ref: persisted.commitSha, expectedContent: persisted.content });
+  await destination.verifyImmutable({ path: persisted.path, version: persisted.version, expectedContent: persisted.content });
   return { pullRequest: verified, taskLog: persisted };
 }
 
 export async function publishUpdateHandoff({ github, storage, task, update }) {
-  const destination = requireStorage(storage);
+  const destination = resolveTaskRecordStorage({ github, storage });
   const record = { ...task, task_type: "update" };
   const persisted = await persistTaskLog({ github, storage: destination, record });
   const commentBody = buildUpdateComment({ summary: update.summary, validation: update.validation, logUrl: persisted.url, commit: task.result_commit });
@@ -75,51 +76,22 @@ export async function publishUpdateHandoff({ github, storage, task, update }) {
   const comments = await github.getIssueComments(task.target_repository, task.pull_request);
   const verifiedComment = comments.find((item) => item.id === comment.id && item.body === commentBody);
   if (!verifiedComment) throw new Error("update handoff verification failed: durable PR comment does not match expected task record linkage");
-  await verifyTaskLog({ github, storage: destination, path: persisted.path, ref: persisted.commitSha, expectedContent: persisted.content });
+  await destination.verifyImmutable({ path: persisted.path, version: persisted.version, expectedContent: persisted.content });
   return { comment: verifiedComment, taskLog: persisted };
 }
 
 export async function persistTaskLog({ github, storage, record }) {
-  const destination = requireStorage(storage);
+  const destination = resolveTaskRecordStorage({ github, storage });
   const path = taskLogPath(record);
   const content = renderTaskLog(record);
-
-  try {
-    const response = await github.createFile(destination.repository, path, content, `crossdock: record task ${record.task_id}`, destination.branch);
-    const commitSha = response.commit?.sha;
-    if (!commitSha) throw new Error("task-record persistence did not return a commit SHA");
-    return persistedTaskLog(destination.repository, path, content, commitSha);
-  } catch (error) {
-    if (![409, 422].includes(error?.status)) throw error;
-  }
-
-  const existing = await github.getFile(destination.repository, path, destination.branch);
-  const actual = decodeFileContent(existing, "task-record retry recovery");
-  if (actual !== content) throw new Error("task-record retry conflict: existing immutable record has different content");
-
-  const commit = await github.getLatestCommitForPath(destination.repository, path, destination.branch);
-  return persistedTaskLog(destination.repository, path, content, commit.sha);
-}
-
-function persistedTaskLog(repository, path, content, commitSha) {
-  const url = `https://github.com/${repository}/blob/${commitSha}/${path}`;
-  return { path, content, commitSha, url };
-}
-
-function requireStorage(storage) {
-  if (!storage || typeof storage !== "object") throw new Error("task-record storage must be configured explicitly");
-  if (!/^[^/]+\/[^/]+$/.test(storage.repository ?? "")) throw new Error("storage.repository must be owner/repo");
-  if (typeof storage.branch !== "string" || !storage.branch) throw new Error("storage.branch is required");
-  return storage;
-}
-
-function decodeFileContent(file, context) {
-  if (!file?.sha || typeof file.content !== "string") throw new Error(`${context} failed: remote file missing content`);
-  return Buffer.from(file.content.replace(/\n/g, ""), "base64").toString("utf8");
-}
-
-async function verifyTaskLog({ github, storage, path, ref, expectedContent }) {
-  const file = await github.getFile(storage.repository, path, ref);
-  const actual = decodeFileContent(file, "task-record verification");
-  if (actual !== expectedContent) throw new Error("task-record verification failed: remote content mismatch");
+  const persisted = await destination.persistImmutable({
+    path,
+    content,
+    message: `crossdock: record task ${record.task_id}`,
+  });
+  if (!persisted || typeof persisted !== "object") throw new Error("task-record storage adapter returned no persistence result");
+  if (persisted.path !== path || persisted.content !== content) throw new Error("task-record storage adapter returned inconsistent persistence metadata");
+  if (typeof persisted.version !== "string" || !persisted.version) throw new Error("task-record storage adapter returned no immutable version");
+  if (typeof persisted.url !== "string" || !persisted.url) throw new Error("task-record storage adapter returned no durable URL");
+  return persisted;
 }
