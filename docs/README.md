@@ -13,5 +13,6 @@ Crossdock is in early public development. These documents describe the intended 
 - [`architecture/overview.md`](architecture/overview.md) — evolving technical architecture.
 - [`architecture/security-boundaries.md`](architecture/security-boundaries.md) — public source, browser sessions, credentials, and task data.
 - [`architecture/browser-integration.md`](architecture/browser-integration.md) — browser-control strategy and fail-closed requirements.
+- [`architecture/live-testing.md`](architecture/live-testing.md) — authenticated provider validation checklist and failure cases.
 - [`reference/task-record-schema.md`](reference/task-record-schema.md) — current implementation-level task-record schema.
 - [`roadmap.md`](roadmap.md) — public development sequence.
