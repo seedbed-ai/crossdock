@@ -4,11 +4,13 @@ Crossdock is an open-source workflow tool for moving bounded engineering work ac
 
 > **Status:** early public development. The deterministic handoff core, loopback service, and experimental desktop Chromium browser adapter are public and under test. Crossdock does not yet have a supported end-user desktop/mobile release, and authenticated provider compatibility still requires live validation.
 
+> **Testers wanted:** independent public live testing is the current highest-value contribution. See [issue #28](https://github.com/seedbed-ai/crossdock/issues/28) and [`docs/testing/public-live-test.md`](docs/testing/public-live-test.md). No private Seedbed infrastructure is required.
+
 ## What Crossdock is building
 
 The initial route is ChatGPT → Codex Cloud → GitHub. Crossdock keeps that provider integration replaceable where practical rather than making provider names the product model.
 
-A completed Crossdock task creates an immutable task record with stable handoff metadata. Prompt and execution-report evidence are independently configurable: current records can retain full canonical evidence, retain only an integrity hash, or omit either evidence class entirely. Crossdock links the record from the initial pull request or a later top-level PR update comment and independently verifies the durable GitHub handoff before reporting completion.
+A completed Crossdock task creates an immutable task record with stable handoff metadata. Prompt and execution-report evidence are independently configurable: current records can retain full canonical evidence, retain only an integrity hash, or omit either evidence class entirely. Crossdock links the record from the initial pull request or a later top-level PR update comment and independently verifies the durable handoff before reporting completion.
 
 Automation is a choice, not an assumption. The current dashboard supports both automatic handoff and review-before-handoff, plus explicit task-record storage. User-facing configuration is intended to expand rather than force one privacy, retention, storage, or workflow preference on every user.
 
@@ -26,27 +28,28 @@ Both experiences must expose the same essential state and capabilities while usi
 The repository currently contains:
 
 - the deterministic task-record and GitHub handoff core;
-- explicit configurable GitHub task-record storage;
+- a task-record storage adapter boundary with a GitHub-backed adapter;
 - configurable prompt/report evidence retention;
 - idempotent immutable-record and update-comment retry handling;
+- a shared configuration resolver with explicit scope precedence;
 - a loopback HTTP handoff service;
 - an experimental Manifest V3 browser adapter and responsive dashboard;
-- public live-test, architecture, configuration, security, and contribution documentation; and
+- public live-test, architecture, configuration, security, development, and contribution documentation; and
 - GitHub Actions validation for the Node/JavaScript surfaces.
 
 The browser adapter remains fail-closed and experimental until authenticated live compatibility testing establishes the current provider DOM/control behavior.
 
 ## Documentation
 
-Start with [`docs/README.md`](docs/README.md). Public testers should use [`docs/testing/public-live-test.md`](docs/testing/public-live-test.md). The documentation covers the workflow model, configurable task evidence, configuration direction, architecture/security boundaries, live-testing expectations, and roadmap.
+Start with [`docs/README.md`](docs/README.md). Public testers should use [`docs/testing/public-live-test.md`](docs/testing/public-live-test.md). The documentation covers the workflow model, configurable task evidence, configuration, storage adapters, architecture/security boundaries, live-testing expectations, repository layout, and roadmap.
 
 ## Contributing
 
-Crossdock is intended for public contribution. See [`CONTRIBUTING.md`](CONTRIBUTING.md) and the public issue tracker. UX, graphic design, documentation, accessibility, adapters, packaging, privacy controls, configuration, and implementation work are all expected contribution areas.
+Crossdock is intended for public contribution. See [`CONTRIBUTING.md`](CONTRIBUTING.md) and the public issue tracker. UX, graphic design, documentation, accessibility, adapters, packaging, privacy controls, configuration, testing, code review, and implementation work are all expected contribution areas.
 
 ## Security and privacy
 
-Prompts and execution reports may contain private development context. Crossdock source is public; user task records are not therefore public. Users can choose how much prompt/report evidence to retain, and broader transient-data controls are under active design. See [`SECURITY.md`](SECURITY.md), [`docs/architecture/security-boundaries.md`](docs/architecture/security-boundaries.md), and the task-record schema reference.
+Prompts and execution reports may contain private development context. Crossdock source is public; user task records are not therefore public. Users can choose how much prompt/report evidence to retain, and broader transient-data controls are under active design. See [`SECURITY.md`](SECURITY.md), [`docs/architecture/security-boundaries.md`](docs/architecture/security-boundaries.md), and [`docs/reference/task-record-schema.md`](docs/reference/task-record-schema.md).
 
 ## License
 
