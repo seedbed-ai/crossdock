@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
-export const TASK_LOG_SCHEMA = "crossdock.task-record/v1";
+export const TASK_LOG_SCHEMA = "crossdock.task-record/v2";
+export const EVIDENCE_MODES = Object.freeze(["full", "hash", "omit"]);
 
 const FORBIDDEN_PATTERNS = [
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i,
@@ -41,14 +42,33 @@ function assertTimestamp(value, field) {
   if (Number.isNaN(Date.parse(value))) throw new Error(`${field} must be an RFC 3339 timestamp`);
 }
 
+function normalizeEvidenceMode(value, field) {
+  const mode = value ?? "full";
+  if (!EVIDENCE_MODES.includes(mode)) throw new Error(`${field} evidence mode must be one of: ${EVIDENCE_MODES.join(", ")}`);
+  return mode;
+}
+
+export function evidencePolicy(record) {
+  const policy = record?.evidence_policy;
+  if (policy != null && (typeof policy !== "object" || Array.isArray(policy))) throw new Error("evidence_policy must be an object");
+  return {
+    prompt: normalizeEvidenceMode(policy?.prompt, "prompt"),
+    report: normalizeEvidenceMode(policy?.report, "report"),
+  };
+}
+
+function validateEvidence(record, field, mode) {
+  if (mode === "omit") return;
+  requireString(record, field);
+  if (mode === "full") assertGithubSafe(record[field], field);
+}
+
 export function validateTaskRecord(record) {
   if (!record || typeof record !== "object") throw new TypeError("record is required");
   requireString(record, "task_id");
   requireString(record, "target_repository");
   requireString(record, "base_branch");
   requireString(record, "working_branch");
-  requireString(record, "prompt");
-  requireString(record, "report");
   assertTimestamp(record.created_at, "created_at");
   assertTimestamp(record.completed_at, "completed_at");
 
@@ -58,8 +78,9 @@ export function validateTaskRecord(record) {
   if (record.task_type === "initial" && record.parent_task_id != null) throw new Error("initial task parent_task_id must be null");
   if (record.task_type === "update" && !record.pull_request) throw new Error("update task requires pull_request");
 
-  assertGithubSafe(record.prompt, "prompt");
-  assertGithubSafe(record.report, "report");
+  const policy = evidencePolicy(record);
+  validateEvidence(record, "prompt", policy.prompt);
+  validateEvidence(record, "report", policy.report);
   return record;
 }
 
@@ -72,18 +93,30 @@ export function taskLogPath(record) {
   return `crossdock/tasks/${owner}/${repo}/${year}/${month}/${record.task_id}.md`;
 }
 
+function evidenceDigest(record, field, mode) {
+  if (mode === "omit") return null;
+  return sha256(record[field]);
+}
+
+function evidenceSection(record, field, title, mode) {
+  if (mode !== "full") return "";
+  return `\n## ${title}\n\n${canonicalizeText(record[field])}\n`;
+}
+
 export function renderTaskLog(record) {
   validateTaskRecord(record);
-  const prompt = canonicalizeText(record.prompt);
-  const report = canonicalizeText(record.report);
+  const policy = evidencePolicy(record);
   const fields = [
     ["schema", TASK_LOG_SCHEMA], ["task_id", record.task_id], ["task_type", record.task_type], ["status", "completed"],
     ["created_at", record.created_at], ["completed_at", record.completed_at], ["target_repository", record.target_repository],
     ["base_branch", record.base_branch], ["working_branch", record.working_branch], ["pull_request", record.pull_request ?? null],
     ["issue", record.issue ?? null], ["agent_task_url", record.agent_task_url ?? record.codex_task_url ?? null],
     ["result_commit", record.result_commit ?? null], ["parent_task_id", record.parent_task_id ?? null],
-    ["prompt_sha256", sha256(prompt)], ["report_sha256", sha256(report)],
+    ["prompt_evidence", policy.prompt], ["report_evidence", policy.report],
+    ["prompt_sha256", evidenceDigest(record, "prompt", policy.prompt)], ["report_sha256", evidenceDigest(record, "report", policy.report)],
   ];
   const frontMatter = fields.map(([key, value]) => `${key}: ${quoteYaml(value)}`).join("\n");
-  return `---\n${frontMatter}\n---\n\n# Crossdock Task\n\n## Prompt\n\n${prompt}\n\n## Report\n\n${report}\n`;
+  const prompt = evidenceSection(record, "prompt", "Prompt", policy.prompt);
+  const report = evidenceSection(record, "report", "Report", policy.report);
+  return `---\n${frontMatter}\n---\n\n# Crossdock Task\n${prompt}${report}`;
 }
