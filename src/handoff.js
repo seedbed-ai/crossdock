@@ -22,7 +22,9 @@ export function buildUpdateComment({ summary, validation = [], recordUrl, commit
 
 export async function publishInitialHandoff({ github, storage, task, pr }) {
   const destination = resolveTaskRecordStorage({ github, storage });
-  validateTaskRecord({ ...task, task_type: "initial", pull_request: null, parent_task_id: null });
+  const preflightRecord = { ...task, task_type: "initial", pull_request: null, parent_task_id: null };
+  validateTaskRecord(preflightRecord);
+  preflightTaskRecordForDestination(destination, preflightRecord);
 
   const provisionalBody = pr.provisionalBody ?? pr.summary;
   assertGithubSafe(provisionalBody, "pull request body");
@@ -102,4 +104,9 @@ export async function persistTaskRecord({ github, storage, record }) {
   if (typeof persisted.version !== "string" || !persisted.version) throw new Error("task-record storage adapter returned no immutable version");
   if (typeof persisted.url !== "string" || !persisted.url) throw new Error("task-record storage adapter returned no durable URL");
   return persisted;
+}
+
+function preflightTaskRecordForDestination(destination, record) {
+  if (destination.type !== "github") return;
+  assertGithubSafe(renderTaskRecord(record), "task record");
 }
