@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Crossdock</title>
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div><p class="eyebrow">Developer handoff</p><h1>Crossdock</h1></div>
+      <output id="status" role="status" aria-live="polite">Ready.</output>
+    </header>
+
+    <nav class="surfaces" aria-label="Connected work surfaces">
+      <button id="open-chatgpt">ChatGPT</button>
+      <button id="open-codex">Codex</button>
+      <button id="open-github">GitHub</button>
+    </nav>
+
+    <section class="grid" aria-label="Task setup">
+      <label>Target repository <input id="repository" placeholder="owner/repo" autocomplete="off"></label>
+      <label>Issue <input id="issue" inputmode="numeric" placeholder="optional"></label>
+      <label>Existing PR <input id="pull-request" inputmode="numeric" placeholder="blank for a new PR"></label>
+      <label>Handoff mode
+        <select id="handoff-mode"><option value="review">Review before handoff</option><option value="automatic">Automatic</option></select>
+      </label>
+      <label class="wide">Task-record repository <input id="storage-repository" placeholder="private owner/repo" autocomplete="off"></label>
+      <label>Task-record branch <input id="storage-branch" value="main" autocomplete="off"></label>
+      <label class="wide">PR / update summary <textarea id="summary" rows="3" placeholder="What changed and why?"></textarea></label>
+      <label class="wide">Validation <textarea id="validation" rows="3" placeholder="One result per line"></textarea></label>
+    </section>
+
+    <section class="actions" aria-label="Task actions">
+      <button id="capture">Capture prompt</button>
+      <button id="submit" class="primary">Create Codex task</button>
+      <button id="finalize-initial">Finalize new PR</button>
+      <button id="finalize-update">Finalize branch update</button>
+    </section>
+
+    <label class="prompt">Captured prompt <textarea id="prompt" rows="10" readonly></textarea></label>
+  </main>
+  <script src="dashboard.js"></script>
+</body>
+</html>

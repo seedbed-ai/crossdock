@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Crossdock",
+  "version": "0.1.0",
+  "description": "Orchestrates conversation to coding-agent to GitHub handoffs.",
+  "permissions": ["tabs", "storage"],
+  "host_permissions": ["https://chatgpt.com/*", "http://127.0.0.1:3210/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "Open Crossdock" },
+  "content_scripts": [
+    { "matches": ["https://chatgpt.com/*"], "js": ["content.js"], "run_at": "document_idle" }
+  ]
+}
