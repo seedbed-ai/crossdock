@@ -61,6 +61,20 @@ async function monitorTask() {
   monitoring = true;
   try {
     while (taskState) {
+      if (taskState.phase === "pr-create-uncertain") {
+        try {
+          const recovered = await recoverInitialPrCreation();
+          if (!recovered) {
+            setStatus("Create PR was invoked, but the resulting PR URL is not visible yet. Waiting without invoking Create PR again…");
+            await sleep(POLL_MS);
+          }
+          continue;
+        } catch (error) {
+          setStatus(`Recovering created PR: ${error.message}. Will retry without invoking Create PR again.`, true);
+          await sleep(POLL_MS);
+          continue;
+        }
+      }
       if (taskState.phase === "pr-created") {
         try {
           await finishInitialAfterPrCreated();
@@ -118,25 +132,53 @@ async function finalizeInitial() {
       targetRepository: taskState.repository,
       captureReport: taskState.evidence_policy.report !== "omit",
     });
-    const prNumber = parsePrNumber(result.prUrl, taskState.repository);
-    $("pull-request").value = String(prNumber);
-    taskState.phase = "pr-created";
-    taskState.pull_request = prNumber;
-    taskState.final_pr_url = result.prUrl;
     taskState.final_task_url = result.taskUrl;
     taskState.final_report = result.report;
-    await saveTaskState();
-    await persist();
+    taskState.pr_discovery = result.discovery;
+
+    if (!result.prUrl) {
+      taskState.phase = "pr-create-uncertain";
+      await saveTaskState();
+      setStatus("Create PR was invoked, but Crossdock has not identified the resulting PR yet. Recovering without invoking Create PR again…");
+      void monitorTask();
+      return;
+    }
+
+    await rememberCreatedPr(result.prUrl);
     await finishInitialAfterPrCreated();
   } catch (error) {
     if (taskState?.phase === "finalizing") {
       taskState.phase = "ready";
       await saveTaskState();
-    } else if (taskState?.phase === "pr-created") {
+    } else if (["pr-create-uncertain", "pr-created"].includes(taskState?.phase)) {
       void monitorTask();
     }
     throw error;
   }
+}
+
+async function recoverInitialPrCreation() {
+  requireTaskState("initial");
+  if (taskState.phase !== "pr-create-uncertain") return false;
+  if (!taskState.pr_discovery || !taskState.final_task_url) throw new Error("created PR recovery state is incomplete");
+  const result = await send({
+    type: "crossdock.recoverCreatedPr",
+    targetRepository: taskState.repository,
+    discovery: taskState.pr_discovery,
+  });
+  if (!result.prUrl) return false;
+  await rememberCreatedPr(result.prUrl);
+  return true;
+}
+
+async function rememberCreatedPr(prUrl) {
+  const prNumber = parsePrNumber(prUrl, taskState.repository);
+  $("pull-request").value = String(prNumber);
+  taskState.phase = "pr-created";
+  taskState.pull_request = prNumber;
+  taskState.final_pr_url = prUrl;
+  await saveTaskState();
+  await persist();
 }
 
 async function finishInitialAfterPrCreated() {
