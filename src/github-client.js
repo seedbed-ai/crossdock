@@ -45,6 +45,15 @@ export class GitHubClient {
     return this.request("GET", `/repos/${owner}/${repo}/contents/${encodePath(path)}${query}`);
   }
 
+  async getLatestCommitForPath(repository, path, ref) {
+    const [owner, repo] = repository.split("/");
+    const params = new URLSearchParams({ path, per_page: "1" });
+    if (ref) params.set("sha", ref);
+    const commits = await this.request("GET", `/repos/${owner}/${repo}/commits?${params}`);
+    if (!Array.isArray(commits) || !commits[0]?.sha) throw new Error("GitHub did not return a commit for the task-record path");
+    return commits[0];
+  }
+
   createPullRequest(repository, { title, body, head, base, draft = false }) {
     const [owner, repo] = repository.split("/");
     return this.request("POST", `/repos/${owner}/${repo}/pulls`, { title, body, head, base, draft });
