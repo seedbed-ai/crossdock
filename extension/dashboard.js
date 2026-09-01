@@ -306,8 +306,11 @@ function requireServiceUrl() {
     throw new Error("Crossdock service URL must be a valid URL");
   }
   if (url.protocol !== "http:" || url.hostname !== "127.0.0.1") throw new Error("Crossdock service URL must use HTTP on 127.0.0.1");
-  if (url.username || url.password || url.search || url.hash || url.pathname !== "/") throw new Error("Crossdock service URL must contain only the loopback origin and optional port");
-  return url.origin;
+  if (!url.port) throw new Error("Crossdock service URL must include an explicit port");
+  const port = Number(url.port);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Crossdock service URL port must be between 1 and 65535");
+  if (url.username || url.password || url.search || url.hash || url.pathname !== "/") throw new Error("Crossdock service URL must contain only the loopback origin and explicit port");
+  return `http://127.0.0.1:${port}`;
 }
 
 function requireStorage() {
