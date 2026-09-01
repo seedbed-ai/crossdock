@@ -38,7 +38,8 @@ export function validateConfig(config, { requireStorage = false } = {}) {
 
   const evidence = normalizeEvidence(config.evidence_policy, "config.evidence_policy", true);
   const storage = normalizeStorage(config.storage, "config.storage");
-  const serviceUrl = normalizeServiceUrl(config.service_url ?? DEFAULT_SERVICE_URL, "config.service_url");
+  const rawServiceUrl = Object.hasOwn(config, "service_url") ? config.service_url : DEFAULT_SERVICE_URL;
+  const serviceUrl = normalizeServiceUrl(rawServiceUrl, "config.service_url");
   if (requireStorage && storage == null) throw new Error("task-record storage must be configured");
 
   return {
