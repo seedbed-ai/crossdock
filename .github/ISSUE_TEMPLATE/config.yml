@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions, ideas, and compatibility discussion
+    url: https://github.com/seedbed-ai/crossdock/discussions
+    about: Ask for help, discuss workflows, share ideas, or compare testing environments before opening a concrete issue.
+  - name: Security reporting guidance
+    url: https://github.com/seedbed-ai/crossdock/security
+    about: Review the repository security guidance before publicly reporting a vulnerability.
