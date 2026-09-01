@@ -13,9 +13,15 @@ export function createGitHubTaskRecordStorage({ github, repository, branch }) {
     repository,
     branch,
 
-    async persistImmutable({ path, content, message }) {
+    preflightImmutable({ path, content, message }) {
       requireRecordInput(path, content, message);
       assertGithubSafe(content, "task record");
+      return true;
+    },
+
+    async persistImmutable(input) {
+      this.preflightImmutable(input);
+      const { path, content, message } = input;
 
       try {
         const response = await github.createFile(repository, path, content, message, branch);
@@ -63,7 +69,8 @@ export function isTaskRecordStorageAdapter(value) {
     value.adapter === TASK_RECORD_STORAGE_ADAPTER &&
     typeof value.type === "string" &&
     typeof value.persistImmutable === "function" &&
-    typeof value.verifyImmutable === "function"
+    typeof value.verifyImmutable === "function" &&
+    (value.preflightImmutable === undefined || typeof value.preflightImmutable === "function")
   );
 }
 
