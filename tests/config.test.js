@@ -65,16 +65,31 @@ test("GitHub storage normalizes type and validates destination", () => {
   assert.throws(() => resolveConfig({ task: { storage: { repository: "not-a-repo", branch: "main" } } }), /owner\/repo/);
 });
 
-test("service URL is loopback-only and requires an explicit port", () => {
+test("service URL accepts only an explicit numeric loopback origin", () => {
   assert.equal(normalizeServiceUrl("http://127.0.0.1:4321"), "http://127.0.0.1:4321");
-  assert.throws(() => normalizeServiceUrl("https://127.0.0.1:4321"), /must use http/);
-  assert.throws(() => normalizeServiceUrl("http://localhost:4321"), /127\.0\.0\.1 loopback host/);
-  assert.throws(() => normalizeServiceUrl("http://192.168.1.10:4321"), /127\.0\.0\.1 loopback host/);
-  assert.throws(() => normalizeServiceUrl("http://127.0.0.1"), /explicit port/);
-  assert.throws(() => normalizeServiceUrl("http://127.0.0.1:4321/path"), /must not include a path/);
-  assert.throws(() => normalizeServiceUrl("http://user:pass@127.0.0.1:4321"), /must not include credentials/);
-  assert.throws(() => normalizeServiceUrl("http://127.0.0.1:4321/?x=1"), /query parameters/);
-  assert.throws(() => normalizeServiceUrl("http://127.0.0.1:4321/#fragment"), /fragments/);
+  assert.equal(normalizeServiceUrl("http://127.0.0.1:80"), "http://127.0.0.1:80");
+  for (const invalid of [
+    "https://127.0.0.1:4321",
+    "http://localhost:4321",
+    "http://192.168.1.10:4321",
+    "http://127.0.0.1",
+    "http://127.0.0.1:4321/path",
+    "http://user:pass@127.0.0.1:4321",
+    "http://127.0.0.1:4321/?x=1",
+    "http://127.0.0.1:4321/#fragment",
+  ]) assert.throws(() => normalizeServiceUrl(invalid), /HTTP 127\.0\.0\.1 loopback origin with an explicit port/);
+});
+
+test("existing v1 config defaults only an absent service URL", () => {
+  const legacy = {
+    schema: CONFIG_SCHEMA,
+    handoff_mode: "review",
+    evidence_policy: { prompt: "full", report: "full" },
+    storage: null,
+  };
+  assert.equal(validateConfig(legacy).service_url, DEFAULT_SERVICE_URL);
+  assert.throws(() => validateConfig({ ...legacy, service_url: null }), /config\.service_url is required/);
+  assert.throws(() => validateConfig({ ...legacy, service_url: "" }), /config\.service_url is required/);
 });
 
 test("validateConfig can require a durable storage destination", () => {
