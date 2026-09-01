@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { domainToASCII } from "node:url";
 import { WORK_ITEM_INTENTS } from "./agent-capabilities.js";
 
 export const TASK_RECORD_V3_SCHEMA = "crossdock.task-record/v3";
@@ -6,22 +7,32 @@ export const TASK_RECORD_V3_EVIDENCE_MODES = Object.freeze(["full", "hash", "omi
 export const TASK_RECORD_V3_HANDOFF_PHASES = Object.freeze(["none", "initial-change", "branch-update", "review-publication", "artifact-publication"]);
 export const TASK_RECORD_V3_PUBLICATION_REQUESTS = Object.freeze(["forbidden", "not-requested", "authorized"]);
 export const TASK_RECORD_V3_PUBLICATION_OUTCOMES = Object.freeze(["not-attempted", "published", "failed"]);
+export const TASK_RECORD_V3_ARTIFACT_TYPES = Object.freeze([
+  "source-control.review",
+  "source-control.comment",
+  "source-control.thread",
+  "source-control.change",
+  "source-control.commit",
+  "crossdock.finding",
+]);
 
+const CAUSAL_ARTIFACT_TYPES = new Set(["source-control.thread", "crossdock.finding"]);
 const INPUT_FIELDS = new Set([
   "task_id", "intent", "status", "created_at", "completed_at", "handoff_phase",
   "parent_task_id", "parent_record", "causal_artifact", "family_id", "schedule_id", "schedule_occurrence",
   "source", "origin", "agent", "evidence_policy", "request", "result", "publications", "artifacts", "recovery_state",
 ]);
-
 const METADATA_FIELDS = new Set([
   "schema", "task_id", "intent", "status", "created_at", "completed_at", "handoff_phase",
   "parent_task_id", "parent_record", "causal_artifact", "family_id", "schedule_id", "schedule_occurrence",
   "source", "origin", "agent", "evidence", "publications", "artifacts", "recovery_state",
 ]);
+const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
 
 /** Canonicalize retained evidence before hashing, byte-counting, or persistence. */
 export function canonicalizeTaskRecordV3Evidence(value) {
-  if (typeof value !== "string") throw new TypeError("evidence must be a string");
+  assertUnicodeScalarString(value, "evidence");
   return value.replace(/\r\n?/g, "\n");
 }
 
@@ -29,36 +40,11 @@ export function sha256TaskRecordV3Evidence(value) {
   return createHash("sha256").update(canonicalizeTaskRecordV3Evidence(value), "utf8").digest("hex");
 }
 
-/**
- * Render the experimental v3 wire format without changing the active v2 writer.
- * JSON is emitted inside YAML front matter because JSON is a YAML 1.2 subset;
- * recursive key sorting gives this dependency-free prototype one exact grammar.
- */
+/** Render the experimental v3 wire format without changing the active v2 writer. */
 export function renderTaskRecordV3(record) {
   const normalized = validateTaskRecordV3Input(record);
   const evidence = buildEvidenceMetadata(normalized);
-  const metadata = canonicalObject({
-    schema: TASK_RECORD_V3_SCHEMA,
-    task_id: normalized.task_id,
-    intent: normalized.intent,
-    status: "completed",
-    created_at: normalized.created_at,
-    completed_at: normalized.completed_at,
-    handoff_phase: normalized.handoff_phase,
-    parent_task_id: normalized.parent_task_id,
-    parent_record: normalized.parent_record,
-    causal_artifact: normalized.causal_artifact,
-    family_id: normalized.family_id,
-    schedule_id: normalized.schedule_id,
-    schedule_occurrence: normalized.schedule_occurrence,
-    source: normalized.source,
-    origin: normalized.origin,
-    agent: normalized.agent,
-    evidence,
-    publications: normalized.publications,
-    artifacts: normalized.artifacts,
-    recovery_state: normalized.recovery_state,
-  });
+  const metadata = buildMetadata(normalized, evidence);
 
   let output = `---\n${JSON.stringify(metadata, null, 2)}\n---\n`;
   for (const field of ["request", "result"]) {
@@ -68,10 +54,16 @@ export function renderTaskRecordV3(record) {
   return output;
 }
 
-/** Parse and fully verify one v3 record without scanning arbitrary evidence. */
+/**
+ * Parse and fully verify one v3 record from its original bytes.
+ *
+ * Accepting only Uint8Array/Buffer is intentional: converting arbitrary wire
+ * bytes to a JavaScript string before this boundary could already replace
+ * malformed UTF-8 and make byte-level validation impossible.
+ */
 export function parseTaskRecordV3(value) {
-  if (typeof value !== "string") throw new TypeError("task record must be a string");
-  const bytes = Buffer.from(value, "utf8");
+  if (!(value instanceof Uint8Array)) throw new TypeError("task record must be a Uint8Array or Buffer containing original bytes");
+  const bytes = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
   const opening = Buffer.from("---\n");
   if (!bytes.subarray(0, opening.length).equals(opening)) throw new Error("task record must start with YAML front matter");
 
@@ -79,7 +71,7 @@ export function parseTaskRecordV3(value) {
   const closeAt = bytes.indexOf(closing, opening.length);
   if (closeAt < 0) throw new Error("task record front matter is not terminated");
 
-  const metadataText = bytes.subarray(opening.length, closeAt).toString("utf8");
+  const metadataText = decodeUtf8(bytes.subarray(opening.length, closeAt), "task record front matter");
   let metadata;
   try {
     metadata = JSON.parse(metadataText);
@@ -87,9 +79,6 @@ export function parseTaskRecordV3(value) {
     throw new Error("task record v3 front matter must use canonical JSON-compatible YAML");
   }
 
-  // Re-encoding must be byte-identical. This rejects reordered/noncanonical
-  // metadata and also prevents duplicate JSON keys from being accepted after
-  // JSON.parse() silently collapses them.
   const canonicalMetadata = JSON.stringify(canonicalObject(metadata), null, 2);
   if (canonicalMetadata !== metadataText) throw new Error("task record v3 front matter is not canonical");
   validateTaskRecordV3Metadata(metadata);
@@ -102,7 +91,7 @@ export function parseTaskRecordV3(value) {
 
     const headerEnd = bytes.indexOf(0x0a, cursor);
     if (headerEnd < 0) throw new Error(`${field} evidence header is incomplete`);
-    const header = bytes.subarray(cursor, headerEnd).toString("utf8");
+    const header = decodeUtf8(bytes.subarray(cursor, headerEnd), `${field} evidence header`);
     if (header !== `X-Crossdock-Evidence: ${field}; bytes=${descriptor.bytes}`) {
       throw new Error(`${field} evidence header does not match metadata`);
     }
@@ -110,9 +99,7 @@ export function parseTaskRecordV3(value) {
     const start = headerEnd + 1;
     const end = start + descriptor.bytes;
     if (end > bytes.length) throw new Error(`${field} evidence is truncated`);
-    const payloadBytes = bytes.subarray(start, end);
-    const text = payloadBytes.toString("utf8");
-    if (!Buffer.from(text, "utf8").equals(payloadBytes)) throw new Error(`${field} evidence is not valid UTF-8`);
+    const text = decodeUtf8(bytes.subarray(start, end), `${field} evidence`);
     if (canonicalizeTaskRecordV3Evidence(text) !== text) throw new Error(`${field} evidence is not canonically LF-normalized`);
     if (sha256TaskRecordV3Evidence(text) !== descriptor.sha256) throw new Error(`${field} evidence digest does not match metadata`);
     retained[field] = text;
@@ -136,9 +123,7 @@ export function validateTaskRecordV3Input(record) {
 
   const parentTaskId = optionalString(record.parent_task_id, "parent_task_id");
   const parentRecord = normalizeParentRecord(record.parent_record, parentTaskId);
-  const causalArtifact = optionalString(record.causal_artifact, "causal_artifact");
-  if (causalArtifact && !parentRecord) throw new Error("causal_artifact requires parent_record so its namespace is durable");
-
+  const causalArtifact = normalizeCausalArtifact(record.causal_artifact, parentRecord);
   const policy = normalizeEvidencePolicy(record.evidence_policy);
   const request = normalizeEvidenceInput(record.request, policy.request, "request");
   const result = normalizeEvidenceInput(record.result, policy.result, "result");
@@ -146,20 +131,21 @@ export function validateTaskRecordV3Input(record) {
   const publications = normalizePublications(record.publications ?? []);
   validatePublicationArtifactLinks(publications, artifacts);
 
+  const handoffPhase = requireEnum(record.handoff_phase ?? "none", TASK_RECORD_V3_HANDOFF_PHASES, "handoff_phase");
   return deepFreeze({
     task_id: taskId,
     intent,
     status: "completed",
     created_at: requireTimestamp(record.created_at, "created_at"),
     completed_at: requireTimestamp(record.completed_at, "completed_at"),
-    handoff_phase: requireEnum(record.handoff_phase ?? "none", TASK_RECORD_V3_HANDOFF_PHASES, "handoff_phase"),
+    handoff_phase: handoffPhase,
     parent_task_id: parentTaskId,
     parent_record: parentRecord,
     causal_artifact: causalArtifact,
     family_id: optionalString(record.family_id, "family_id"),
     schedule_id: optionalString(record.schedule_id, "schedule_id"),
     schedule_occurrence: optionalTimestamp(record.schedule_occurrence, "schedule_occurrence"),
-    source: normalizeSource(record.source, intent, record.handoff_phase ?? "none"),
+    source: normalizeSource(record.source, intent, handoffPhase),
     origin: normalizeOrigin(record.origin),
     agent: normalizeAgent(record.agent),
     evidence_policy: policy,
@@ -174,15 +160,15 @@ export function validateTaskRecordV3Input(record) {
 export function validateTaskRecordV3Metadata(metadata) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) throw new TypeError("v3 metadata must be an object");
   assertKnownKeys(metadata, METADATA_FIELDS, "v3 metadata");
+  assertRequiredKeys(metadata, METADATA_FIELDS, "v3 metadata");
   if (metadata.schema !== TASK_RECORD_V3_SCHEMA) throw new Error(`schema must be ${TASK_RECORD_V3_SCHEMA}`);
   if (!metadata.evidence || typeof metadata.evidence !== "object" || Array.isArray(metadata.evidence)) throw new Error("metadata.evidence is required");
   assertKnownKeys(metadata.evidence, new Set(["request", "result"]), "metadata.evidence");
+  assertRequiredKeys(metadata.evidence, new Set(["request", "result"]), "metadata.evidence");
   validateStoredEvidenceDescriptor(metadata.evidence.request, "request");
   validateStoredEvidenceDescriptor(metadata.evidence.result, "result");
 
-  // Reuse structural validation with placeholder raw text. Stored digest/byte
-  // truth is checked independently above and against payload bytes in parser.
-  validateTaskRecordV3Input({
+  const normalized = validateTaskRecordV3Input({
     task_id: metadata.task_id,
     intent: metadata.intent,
     status: metadata.status,
@@ -208,7 +194,37 @@ export function validateTaskRecordV3Metadata(metadata) {
     artifacts: metadata.artifacts,
     recovery_state: metadata.recovery_state,
   });
+
+  const expected = buildMetadata(normalized, metadata.evidence);
+  if (JSON.stringify(expected) !== JSON.stringify(canonicalObject(metadata))) {
+    throw new Error("task record v3 metadata contains noncanonical or implicit values");
+  }
   return metadata;
+}
+
+function buildMetadata(record, evidence) {
+  return canonicalObject({
+    schema: TASK_RECORD_V3_SCHEMA,
+    task_id: record.task_id,
+    intent: record.intent,
+    status: "completed",
+    created_at: record.created_at,
+    completed_at: record.completed_at,
+    handoff_phase: record.handoff_phase,
+    parent_task_id: record.parent_task_id,
+    parent_record: record.parent_record,
+    causal_artifact: record.causal_artifact,
+    family_id: record.family_id,
+    schedule_id: record.schedule_id,
+    schedule_occurrence: record.schedule_occurrence,
+    source: record.source,
+    origin: record.origin,
+    agent: record.agent,
+    evidence,
+    publications: record.publications,
+    artifacts: record.artifacts,
+    recovery_state: record.recovery_state,
+  });
 }
 
 function buildEvidenceMetadata(record) {
@@ -281,6 +297,23 @@ function normalizeParentRecord(parentRecord, parentTaskId) {
   });
 }
 
+function normalizeCausalArtifact(value, parentRecord) {
+  if (value == null) return null;
+  if (!parentRecord) throw new Error("causal_artifact requires parent_record so its namespace is durable");
+  if (typeof value !== "object" || Array.isArray(value)) throw new Error("causal_artifact must be a durable artifact locator object");
+  assertKnownKeys(value, new Set(["artifact_id", "type", "adapter", "host", "remote_id", "target", "version"]), "causal_artifact");
+  const type = requireEnum(value.type, [...CAUSAL_ARTIFACT_TYPES], "causal_artifact.type");
+  return canonicalObject({
+    artifact_id: requireString(value.artifact_id, "causal_artifact.artifact_id"),
+    type,
+    adapter: requireString(value.adapter, "causal_artifact.adapter"),
+    host: requireHost(value.host, "causal_artifact.host"),
+    remote_id: requireString(value.remote_id, "causal_artifact.remote_id"),
+    target: requireString(value.target, "causal_artifact.target"),
+    version: optionalString(value.version, "causal_artifact.version"),
+  });
+}
+
 function normalizeAgent(agent) {
   if (!agent || typeof agent !== "object" || Array.isArray(agent)) throw new Error("agent is required");
   assertKnownKeys(agent, new Set(["adapter", "provider", "surface", "task_url"]), "agent");
@@ -349,7 +382,7 @@ function normalizeArtifacts(values) {
     assertKnownKeys(value, new Set(["artifact_id", "type", "adapter", "host", "remote_id", "url", "target", "version", "verification"]), `artifacts[${index}]`);
     const artifact = canonicalObject({
       artifact_id: requireString(value.artifact_id, `artifacts[${index}].artifact_id`),
-      type: requireString(value.type, `artifacts[${index}].type`),
+      type: requireEnum(value.type, TASK_RECORD_V3_ARTIFACT_TYPES, `artifacts[${index}].type`),
       adapter: requireString(value.adapter, `artifacts[${index}].adapter`),
       host: requireHost(value.host, `artifacts[${index}].host`),
       remote_id: requireString(value.remote_id, `artifacts[${index}].remote_id`),
@@ -358,7 +391,6 @@ function normalizeArtifacts(values) {
       version: optionalString(value.version, `artifacts[${index}].version`),
       verification: requireEnum(value.verification, ["verified"], `artifacts[${index}].verification`),
     });
-    if (artifact.type === "crossdock.task-record") throw new Error("a v3 task record must not contain a self-referential task-record artifact");
     if (ids.has(artifact.artifact_id)) throw new Error(`duplicate artifact_id: ${artifact.artifact_id}`);
     ids.add(artifact.artifact_id);
     return artifact;
@@ -368,15 +400,21 @@ function normalizeArtifacts(values) {
 }
 
 function validatePublicationArtifactLinks(publications, artifacts) {
-  const ids = new Set(artifacts.map((artifact) => artifact.artifact_id));
+  const byId = new Map(artifacts.map((artifact) => [artifact.artifact_id, artifact]));
   for (const publication of publications) {
-    if (publication.artifact_id && !ids.has(publication.artifact_id)) throw new Error(`${publication.publication_id} references unknown artifact_id: ${publication.artifact_id}`);
+    if (!publication.artifact_id) continue;
+    const artifact = byId.get(publication.artifact_id);
+    if (!artifact) throw new Error(`${publication.publication_id} references unknown artifact_id: ${publication.artifact_id}`);
+    if (artifact.adapter !== publication.destination_adapter || artifact.host !== publication.destination_host || artifact.target !== publication.target) {
+      throw new Error(`${publication.publication_id} artifact does not match publication destination`);
+    }
   }
 }
 
 function validateStoredEvidenceDescriptor(value, field) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`metadata.evidence.${field} is required`);
   assertKnownKeys(value, new Set(["mode", "sha256", "bytes"]), `metadata.evidence.${field}`);
+  assertRequiredKeys(value, new Set(["mode", "sha256", "bytes"]), `metadata.evidence.${field}`);
   const mode = requireEnum(value.mode, TASK_RECORD_V3_EVIDENCE_MODES, `metadata.evidence.${field}.mode`);
   if (mode === "omit") {
     if (value.sha256 !== null || value.bytes !== null) throw new Error(`${field} omit metadata must have null digest and bytes`);
@@ -395,12 +433,23 @@ function canonicalObject(value) {
 
 function requireHost(value, label) {
   const host = requireString(value, label);
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(host) || host.includes("/") || /\s/.test(host)) throw new Error(`${label} must be a host name without scheme, path, or whitespace`);
-  return host;
+  if (host !== host.trim()) throw new Error(`${label} must not contain surrounding whitespace`);
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(host) || host.includes("/") || host.includes(":") || /\s/.test(host)) {
+    throw new Error(`${label} must be a host name without scheme, port, path, or whitespace`);
+  }
+  const ascii = domainToASCII(host.toLowerCase());
+  if (!ascii || ascii.length > 253 || !/^[a-z0-9.-]+$/.test(ascii) || ascii.startsWith(".") || ascii.endsWith(".") || ascii.includes("..")) {
+    throw new Error(`${label} must be a valid DNS host name`);
+  }
+  for (const part of ascii.split(".")) {
+    if (!part || part.length > 63 || part.startsWith("-") || part.endsWith("-")) throw new Error(`${label} must be a valid DNS host name`);
+  }
+  return ascii;
 }
 
 function requireString(value, label) {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${label} is required`);
+  assertUnicodeScalarString(value, label);
   return value;
 }
 
@@ -411,8 +460,10 @@ function optionalString(value, label) {
 
 function requireTimestamp(value, label) {
   const text = requireString(value, label);
-  if (Number.isNaN(Date.parse(text))) throw new Error(`${label} must be an RFC 3339 timestamp`);
-  return text;
+  if (!RFC3339.test(text)) throw new Error(`${label} must be an RFC 3339 timestamp`);
+  const millis = Date.parse(text);
+  if (Number.isNaN(millis)) throw new Error(`${label} must be an RFC 3339 timestamp`);
+  return new Date(millis).toISOString();
 }
 
 function optionalTimestamp(value, label) {
@@ -426,6 +477,32 @@ function requireEnum(value, allowed, label) {
 
 function assertKnownKeys(value, allowed, label) {
   for (const key of Object.keys(value)) if (!allowed.has(key)) throw new Error(`${label} contains unknown field: ${key}`);
+}
+
+function assertRequiredKeys(value, required, label) {
+  for (const key of required) if (!Object.hasOwn(value, key)) throw new Error(`${label} is missing required field: ${key}`);
+}
+
+function assertUnicodeScalarString(value, label) {
+  if (typeof value !== "string") throw new TypeError(`${label} must be a string`);
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) throw new Error(`${label} contains an unpaired UTF-16 surrogate`);
+      index += 1;
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      throw new Error(`${label} contains an unpaired UTF-16 surrogate`);
+    }
+  }
+}
+
+function decodeUtf8(bytes, label) {
+  try {
+    return UTF8_DECODER.decode(bytes);
+  } catch {
+    throw new Error(`${label} is not valid UTF-8`);
+  }
 }
 
 function deepFreeze(value) {
