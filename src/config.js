@@ -3,12 +3,16 @@ import { EVIDENCE_MODES } from "./task-record.js";
 export const CONFIG_SCHEMA = "crossdock.config/v1";
 export const HANDOFF_MODES = Object.freeze(["review", "automatic"]);
 export const CONFIG_SCOPES = Object.freeze(["global", "provider", "workspace", "repository", "task"]);
+export const DEFAULT_SERVICE_URL = "http://127.0.0.1:3210";
+
+const CONFIG_FIELDS = new Set(["schema", "handoff_mode", "evidence_policy", "storage", "service_url"]);
 
 export const DEFAULT_CONFIG = deepFreeze({
   schema: CONFIG_SCHEMA,
   handoff_mode: "review",
   evidence_policy: { prompt: "full", report: "full" },
   storage: null,
+  service_url: DEFAULT_SERVICE_URL,
 });
 
 export function resolveConfig(scopes = {}) {
@@ -26,12 +30,13 @@ export function resolveConfig(scopes = {}) {
 
 export function validateConfig(config, { requireStorage = false } = {}) {
   if (!config || typeof config !== "object" || Array.isArray(config)) throw new TypeError("config must be an object");
-  assertKnownKeys(config, new Set(["schema", "handoff_mode", "evidence_policy", "storage"]), "config");
+  assertKnownKeys(config, CONFIG_FIELDS, "config");
   if (config.schema !== CONFIG_SCHEMA) throw new Error(`config.schema must be ${CONFIG_SCHEMA}`);
   if (!HANDOFF_MODES.includes(config.handoff_mode)) throw new Error(`handoff_mode must be one of: ${HANDOFF_MODES.join(", ")}`);
 
   const evidence = normalizeEvidence(config.evidence_policy, "config.evidence_policy", true);
   const storage = normalizeStorage(config.storage, "config.storage");
+  const serviceUrl = normalizeServiceUrl(config.service_url, "config.service_url");
   if (requireStorage && storage == null) throw new Error("task-record storage must be configured");
 
   return {
@@ -39,6 +44,7 @@ export function validateConfig(config, { requireStorage = false } = {}) {
     handoff_mode: config.handoff_mode,
     evidence_policy: evidence,
     storage,
+    service_url: serviceUrl,
   };
 }
 
@@ -53,12 +59,34 @@ export function effectiveConfigSummary(config) {
       repository: validated.storage.repository,
       branch: validated.storage.branch,
     },
+    service_url: validated.service_url,
   };
+}
+
+export function normalizeServiceUrl(value, label = "service_url") {
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${label} is required`);
+
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${label} must be a valid URL`);
+  }
+
+  if (url.protocol !== "http:") throw new Error(`${label} must use http`);
+  if (url.hostname !== "127.0.0.1") throw new Error(`${label} must use the 127.0.0.1 loopback host`);
+  if (!url.port) throw new Error(`${label} must include an explicit port`);
+  const port = Number(url.port);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`${label} port must be between 1 and 65535`);
+  if (url.username || url.password || url.search || url.hash) throw new Error(`${label} must not include credentials, query parameters, or fragments`);
+  if (url.pathname !== "/") throw new Error(`${label} must not include a path`);
+
+  return `http://127.0.0.1:${port}`;
 }
 
 function normalizeLayer(layer, scope) {
   if (!layer || typeof layer !== "object" || Array.isArray(layer)) throw new TypeError(`${scope} config must be an object`);
-  assertKnownKeys(layer, new Set(["schema", "handoff_mode", "evidence_policy", "storage"]), `${scope} config`);
+  assertKnownKeys(layer, CONFIG_FIELDS, `${scope} config`);
   if (layer.schema != null && layer.schema !== CONFIG_SCHEMA) throw new Error(`${scope} config schema must be ${CONFIG_SCHEMA}`);
 
   const normalized = {};
@@ -68,6 +96,7 @@ function normalizeLayer(layer, scope) {
   }
   if (Object.hasOwn(layer, "evidence_policy")) normalized.evidence_policy = normalizeEvidence(layer.evidence_policy, `${scope}.evidence_policy`, false);
   if (Object.hasOwn(layer, "storage")) normalized.storage = normalizeStorage(layer.storage, `${scope}.storage`);
+  if (Object.hasOwn(layer, "service_url")) normalized.service_url = normalizeServiceUrl(layer.service_url, `${scope}.service_url`);
   return normalized;
 }
 
@@ -102,6 +131,7 @@ function mergeLayer(base, layer) {
   if (Object.hasOwn(layer, "handoff_mode")) next.handoff_mode = layer.handoff_mode;
   if (Object.hasOwn(layer, "evidence_policy")) next.evidence_policy = { ...next.evidence_policy, ...layer.evidence_policy };
   if (Object.hasOwn(layer, "storage")) next.storage = layer.storage == null ? null : clone(layer.storage);
+  if (Object.hasOwn(layer, "service_url")) next.service_url = layer.service_url;
   return next;
 }
 
