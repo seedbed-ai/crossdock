@@ -14,7 +14,19 @@ Crossdock is pre-release. The current public sequence is intentionally capabilit
 - pluggable task-record storage;
 - automatic and review-before-handoff state machine;
 - task history/recovery semantics;
-- provider adapter contracts.
+- provider adapter contracts;
+- provider-neutral work-item intents and capability discovery;
+- successor durable-record semantics that can represent review, investigation, remediation, and verification without overloading implementation-only task types.
+
+## Agent workflows
+
+- first-class persisted code-review work items;
+- review focus/guidance, reviewed-commit identity, and durable review/comment/thread linkage;
+- review finding → remediation → re-review lineage;
+- investigation/CI-diagnosis and remediation workflows;
+- parallel task families where providers support independent concurrent work;
+- scheduled/repeatable agent work where Crossdock contributes durable state and provenance;
+- image/screenshot-assisted and security-specific workflows only through explicit advertised adapter capabilities.
 
 ## User experience
 
@@ -29,7 +41,8 @@ Crossdock is pre-release. The current public sequence is intentionally capabilit
 - browser extension/service boundary;
 - ChatGPT/Codex live adapter compatibility;
 - GitHub authentication and least-privilege setup;
-- compatibility fixtures and provider-change recovery.
+- compatibility fixtures and provider-change recovery;
+- prefer supported provider APIs/SDKs where available while retaining isolated fail-closed browser adapters for unsupported boundaries.
 
 ## Distribution
 
