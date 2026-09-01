@@ -12,19 +12,22 @@ export function normalizeServiceUrl(value) {
 /**
  * Freeze the historical/default endpoint into active task state once.
  *
- * A recovered task must never inherit a newly edited dashboard preference,
- * because that could redirect private task data and retry state mid-handoff.
+ * Only a truly legacy state with no `service_url` property is migrated. An
+ * explicit null/empty/invalid value is ambiguous persisted state and must fail
+ * validation rather than silently redirect private task data to the default.
  */
 export function migrateActiveTaskServiceUrl(taskState) {
   if (!taskState || typeof taskState !== "object") return { taskState, changed: false };
-  if (taskState.service_url) {
+  if (Object.hasOwn(taskState, "service_url")) {
     return { taskState: { ...taskState, service_url: normalizeServiceUrl(taskState.service_url) }, changed: false };
   }
   return { taskState: { ...taskState, service_url: DEFAULT_SERVICE_URL }, changed: true };
 }
 
 export function resolveServiceUrl({ taskState, preference }) {
-  if (taskState?.service_url) return normalizeServiceUrl(taskState.service_url);
+  if (taskState && typeof taskState === "object" && Object.hasOwn(taskState, "service_url")) {
+    return normalizeServiceUrl(taskState.service_url);
+  }
   return normalizeServiceUrl(preference);
 }
 
