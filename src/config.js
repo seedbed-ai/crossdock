@@ -1,9 +1,11 @@
+import { DEFAULT_SERVICE_URL, normalizeServiceUrl } from "./service-endpoint.js";
 import { EVIDENCE_MODES } from "./task-record.js";
+
+export { DEFAULT_SERVICE_URL, normalizeServiceUrl } from "./service-endpoint.js";
 
 export const CONFIG_SCHEMA = "crossdock.config/v1";
 export const HANDOFF_MODES = Object.freeze(["review", "automatic"]);
 export const CONFIG_SCOPES = Object.freeze(["global", "provider", "workspace", "repository", "task"]);
-export const DEFAULT_SERVICE_URL = "http://127.0.0.1:3210";
 
 const CONFIG_FIELDS = new Set(["schema", "handoff_mode", "evidence_policy", "storage", "service_url"]);
 
@@ -61,27 +63,6 @@ export function effectiveConfigSummary(config) {
     },
     service_url: validated.service_url,
   };
-}
-
-export function normalizeServiceUrl(value, label = "service_url") {
-  if (typeof value !== "string" || !value.trim()) throw new Error(`${label} is required`);
-
-  let url;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error(`${label} must be a valid URL`);
-  }
-
-  if (url.protocol !== "http:") throw new Error(`${label} must use http`);
-  if (url.hostname !== "127.0.0.1") throw new Error(`${label} must use the 127.0.0.1 loopback host`);
-  if (!url.port) throw new Error(`${label} must include an explicit port`);
-  const port = Number(url.port);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`${label} port must be between 1 and 65535`);
-  if (url.username || url.password || url.search || url.hash) throw new Error(`${label} must not include credentials, query parameters, or fragments`);
-  if (url.pathname !== "/") throw new Error(`${label} must not include a path`);
-
-  return `http://127.0.0.1:${port}`;
 }
 
 function normalizeLayer(layer, scope) {
