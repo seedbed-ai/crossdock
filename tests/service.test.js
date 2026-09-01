@@ -21,7 +21,7 @@ function githubMock() {
       this.calls.push(["getFile", repository, path, ref]); return { sha: "blob", content: Buffer.from(storedContent).toString("base64") };
     },
     async addIssueComment() { throw new Error("not expected"); },
-    async getIssueComments() { return []; },
+    async getIssueComments() { this.calls.push(["getIssueComments"]); return []; },
   };
 }
 
@@ -37,6 +37,7 @@ const task = {
 };
 
 const storage = { repository: "example/private-records", branch: "main" };
+const nonePublication = { change_description: "none", change_comment: "none", committed_file: null };
 
 test("hydrateTaskFromPullRequest trusts remote PR refs and head SHA", async () => {
   const github = githubMock();
@@ -58,6 +59,27 @@ test("initial service enriches existing PR instead of creating another", async (
   assert.ok(github.calls.some(([name]) => name === "updatePullRequest"));
   assert.ok(!github.calls.some(([name]) => name === "createPullRequest"));
   assert.match(result.body.task_record_url, /example\/private-records/);
+  assert.deepEqual(result.body.publication, { change_description: "link" });
+});
+
+test("service passes none publication through and returns no update-comment identity", async () => {
+  const github = githubMock();
+  const result = await dispatchHandoff({
+    method: "POST",
+    path: "/handoff/update",
+    github,
+    body: {
+      task: { ...task, task_id: "task-002", parent_task_id: "task-001" },
+      storage,
+      update: { summary: "Recorded without a PR comment." },
+      publication: nonePublication,
+    },
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.comment_id, null);
+  assert.equal(result.body.comment_url, null);
+  assert.deepEqual(result.body.publication, { change_comment: "none" });
+  assert.ok(!github.calls.some(([name]) => name === "getIssueComments"));
 });
 
 test("handoff endpoints require explicit storage", async () => {
