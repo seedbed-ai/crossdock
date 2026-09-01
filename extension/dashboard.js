@@ -4,6 +4,13 @@ import {
   normalizeBrowserPublicationPolicy,
 } from "./publication-client.js";
 import {
+  DEFAULT_PROMPT_RECOVERY_MODE,
+  assertPromptAvailableForRecovery,
+  migrateActiveTaskRecovery,
+  normalizePromptRecoveryMode,
+  taskStateForLocalPersistence,
+} from "./recovery-client.js";
+import {
   DEFAULT_SERVICE_URL,
   migrateActiveTaskServiceUrl,
   normalizeServiceUrl,
@@ -11,7 +18,7 @@ import {
 } from "./service-client.js";
 
 const $ = (id) => document.getElementById(id);
-const fields = ["repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch", "prompt-evidence", "report-evidence", "change-description-publication", "change-comment-publication", "summary", "validation", "prompt"];
+const fields = ["repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch", "prompt-evidence", "report-evidence", "prompt-recovery", "change-description-publication", "change-comment-publication", "summary", "validation", "prompt"];
 const POLL_MS = 5000;
 let taskState = null;
 let monitoring = false;
@@ -42,6 +49,7 @@ $("submit").addEventListener("click", run(async () => {
   const serviceUrl = requireServiceUrl();
   const storage = requireStorage();
   const evidencePolicy = readEvidencePolicy();
+  const recovery = readRecoveryPolicy();
   const publication = readPublicationPolicy();
   const prNumber = parseOptionalPrNumber();
   const mode = prNumber ? "update" : "initial";
@@ -56,6 +64,7 @@ $("submit").addEventListener("click", run(async () => {
     mode,
     handoff_mode: $("handoff-mode").value,
     evidence_policy: evidencePolicy,
+    recovery,
     publication,
     repository,
     service_url: serviceUrl,
@@ -64,6 +73,10 @@ $("submit").addEventListener("click", run(async () => {
     initial_head_sha: initialSnapshot?.head_sha ?? null,
     phase: "submitting",
   };
+
+  // Persist preferences using the selected recovery policy before submission so
+  // a memory-only prompt cannot remain in the dashboard form's local state.
+  await persist();
 
   const result = await send({ type: "crossdock.submitCodex", prompt });
   taskState = { ...pending, task_url: result.taskUrl, phase: "running" };
@@ -345,6 +358,10 @@ function readEvidencePolicy() {
   return { prompt, report };
 }
 
+function readRecoveryPolicy() {
+  return { prompt: normalizePromptRecoveryMode($("prompt-recovery").value) };
+}
+
 function readPublicationPolicy() {
   return normalizeBrowserPublicationPolicy({
     change_description: $("change-description-publication").value,
@@ -403,7 +420,8 @@ function parsePrNumber(url, repository) {
 }
 
 function requireTaskState(mode) {
-  if (!taskState?.task_id || !taskState.prompt) throw new Error("no submitted task is active");
+  if (!taskState?.task_id) throw new Error("no submitted task is active");
+  assertPromptAvailableForRecovery(taskState);
   if (mode && taskState.mode !== mode) throw new Error(`active task is ${taskState.mode}, not ${mode}`);
 }
 
@@ -435,11 +453,13 @@ function setStatus(message, error = false) {
 }
 
 async function saveTaskState() {
-  await chrome.storage.local.set({ taskState });
+  await chrome.storage.local.set({ taskState: taskStateForLocalPersistence(taskState) });
 }
 
 async function persist() {
   const values = Object.fromEntries(fields.map((id) => [id, $(id).value]));
+  const recoveryMode = normalizePromptRecoveryMode(values["prompt-recovery"] || DEFAULT_PROMPT_RECOVERY_MODE);
+  if (recoveryMode === "memory") delete values.prompt;
   await chrome.storage.local.set({ dashboard: values });
 }
 
@@ -449,14 +469,23 @@ async function restore() {
     if ($(id)) $(id).value = value;
   }
   if (!$("service-url").value.trim()) $("service-url").value = DEFAULT_SERVICE_URL;
+  if (!$("prompt-recovery").value) $("prompt-recovery").value = DEFAULT_PROMPT_RECOVERY_MODE;
   if (!$("change-description-publication").value) $("change-description-publication").value = DEFAULT_PUBLICATION_POLICY.change_description;
   if (!$("change-comment-publication").value) $("change-comment-publication").value = DEFAULT_PUBLICATION_POLICY.change_comment;
 
   const serviceMigration = migrateActiveTaskServiceUrl(stored.taskState ?? null);
   const publicationMigration = migrateActiveTaskPublication(serviceMigration.taskState);
-  taskState = publicationMigration.taskState;
+  const recoveryMigration = migrateActiveTaskRecovery(publicationMigration.taskState);
+  taskState = recoveryMigration.taskState;
   if (!taskState) return;
-  if (serviceMigration.changed || publicationMigration.changed) await saveTaskState();
+  if (serviceMigration.changed || publicationMigration.changed || recoveryMigration.changed) await saveTaskState();
+
+  try {
+    assertPromptAvailableForRecovery(taskState);
+  } catch (error) {
+    setStatus(error.message, true);
+    return;
+  }
 
   setStatus(`Recovered active ${taskState.mode} task in phase ${taskState.phase}.`);
   if (taskState.phase !== "ready" || taskState.handoff_mode === "automatic") void monitorTask();
