@@ -18,6 +18,34 @@ npm run check
 
 The current code has no third-party runtime dependencies.
 
+## Local handoff service
+
+The experimental browser adapter talks to a loopback Node service. Set a GitHub token in your local environment, then start the service:
+
+```text
+GITHUB_TOKEN=... npm start
+```
+
+The default endpoint is:
+
+```text
+http://127.0.0.1:3210
+```
+
+To use another loopback port, start the service with `PORT` and set the same origin in the dashboard's **Crossdock service URL** field:
+
+```text
+GITHUB_TOKEN=... PORT=8787 npm start
+```
+
+```text
+http://127.0.0.1:8787
+```
+
+`PORT` must be an integer from 1 through 65535. The browser-facing service URL is intentionally restricted to `http://127.0.0.1:<explicit-port>`; arbitrary hosts, HTTPS endpoints, credentials, paths, query parameters, and fragments are rejected. This is a local security boundary, not a general remote-service configuration option.
+
+When a task starts, Crossdock freezes the selected service URL into the active task state so changing the dashboard preference does not redirect an in-progress handoff or recovery operation.
+
 ## What works today
 
 The public implementation can:
@@ -27,7 +55,7 @@ The public implementation can:
 - create and verify initial PR/update-comment provenance;
 - use an explicitly configured GitHub task-record repository;
 - recover exact immutable task records and update comments idempotently after retries;
-- expose a loopback handoff service with browser-origin restrictions; and
+- expose a configurable loopback handoff service with browser-origin restrictions; and
 - run an experimental Chromium Manifest V3 adapter/dashboard for ChatGPT → Codex Cloud → GitHub workflows.
 
 The provider adapter intentionally fails closed on ambiguous tabs, controls, repositories, PRs, and recovery states.
