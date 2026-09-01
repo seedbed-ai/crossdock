@@ -20,23 +20,26 @@ export const AGENT_FEATURES = Object.freeze([
   "stable-artifacts",
 ]);
 
+export const CAPABILITY_STATUSES = Object.freeze(["experimental", "verified"]);
+
 /**
  * Validate and normalize one adapter capability descriptor.
  *
  * Capability metadata says what an adapter can technically do. It does not
  * grant repository access, mutation authority, evidence-publication consent,
- * or any other user/deployment permission.
+ * or any other user/deployment permission. Features are scoped to one intent
+ * so callers cannot accidentally combine capabilities that the adapter never
+ * promised together.
  */
 export function validateAgentCapabilities(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("agent capabilities must be an object");
-  assertKnownKeys(value, new Set(["schema", "adapter", "provider", "surface", "intents", "features"]), "agent capabilities");
+  assertKnownKeys(value, new Set(["schema", "adapter", "provider", "surface", "intents"]), "agent capabilities");
   if (value.schema !== AGENT_CAPABILITIES_SCHEMA) throw new Error(`agent capabilities schema must be ${AGENT_CAPABILITIES_SCHEMA}`);
 
   const adapter = requireNonEmptyString(value.adapter, "adapter");
   const provider = requireNonEmptyString(value.provider, "provider");
   const surface = requireNonEmptyString(value.surface, "surface");
-  const intents = normalizeEnumList(value.intents, WORK_ITEM_INTENTS, "intents");
-  const features = normalizeEnumList(value.features ?? [], AGENT_FEATURES, "features");
+  const intents = normalizeIntentMap(value.intents);
 
   return deepFreeze({
     schema: AGENT_CAPABILITIES_SCHEMA,
@@ -44,27 +47,62 @@ export function validateAgentCapabilities(value) {
     provider,
     surface,
     intents,
-    features,
   });
 }
 
-export function supportsIntent(capabilities, intent) {
+/**
+ * Return whether an intent is usable for ordinary routing.
+ *
+ * Experimental provider paths are opt-in so capability discovery never turns
+ * an unvalidated browser integration into an implicit supported workflow.
+ */
+export function supportsIntent(capabilities, intent, { allowExperimental = false } = {}) {
   assertKnownIntent(intent);
-  return validateAgentCapabilities(capabilities).intents.includes(intent);
+  const support = validateAgentCapabilities(capabilities).intents[intent];
+  if (!support) return false;
+  return support.status === "verified" || allowExperimental;
 }
 
-export function requireIntentSupport(capabilities, intent) {
+export function requireIntentSupport(capabilities, intent, options = {}) {
   const normalized = validateAgentCapabilities(capabilities);
   assertKnownIntent(intent);
-  if (!normalized.intents.includes(intent)) {
-    throw new Error(`adapter ${normalized.adapter} does not support work-item intent: ${intent}`);
+  const support = normalized.intents[intent];
+  if (!support) throw new Error(`adapter ${normalized.adapter} does not support work-item intent: ${intent}`);
+  if (support.status !== "verified" && options.allowExperimental !== true) {
+    throw new Error(`adapter ${normalized.adapter} supports work-item intent ${intent} only experimentally`);
   }
   return normalized;
 }
 
-export function supportsAgentFeature(capabilities, feature) {
+export function intentCapabilityStatus(capabilities, intent) {
+  assertKnownIntent(intent);
+  return validateAgentCapabilities(capabilities).intents[intent]?.status ?? null;
+}
+
+export function supportsAgentFeature(capabilities, intent, feature, { allowExperimental = false } = {}) {
+  assertKnownIntent(intent);
   assertKnownFeature(feature);
-  return validateAgentCapabilities(capabilities).features.includes(feature);
+  const normalized = validateAgentCapabilities(capabilities);
+  const support = normalized.intents[intent];
+  if (!support) return false;
+  if (support.status !== "verified" && !allowExperimental) return false;
+  return support.features.includes(feature);
+}
+
+function normalizeIntentMap(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("intents must be an object");
+  const result = {};
+  for (const [intent, support] of Object.entries(value)) {
+    assertKnownIntent(intent);
+    if (!support || typeof support !== "object" || Array.isArray(support)) throw new TypeError(`intents.${intent} must be an object`);
+    assertKnownKeys(support, new Set(["status", "features"]), `intents.${intent}`);
+    if (!CAPABILITY_STATUSES.includes(support.status)) throw new Error(`intents.${intent}.status must be one of: ${CAPABILITY_STATUSES.join(", ")}`);
+    result[intent] = {
+      status: support.status,
+      features: normalizeEnumList(support.features ?? [], AGENT_FEATURES, `intents.${intent}.features`),
+    };
+  }
+  return result;
 }
 
 function normalizeEnumList(value, allowed, label) {
