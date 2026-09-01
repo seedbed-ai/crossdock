@@ -25,4 +25,4 @@ Live tests should use disposable target changes and must never publish credentia
 
 Use the public live-test issue template and include the Crossdock ref, operating system, browser/version, Node version, handoff/evidence settings, failing task phase, expected outcome, actual durable GitHub outcome, and redacted screenshots/logs when useful.
 
-Both successes and failures matter. Successful environment reports help establish a compatibility matrix; failures drive adapter hardening.
+Both successes and failures matter. Accepted public results should be summarized in [`compatibility.md`](compatibility.md) with a link to the detailed report. The matrix is dated evidence, not a timeless provider-compatibility promise.

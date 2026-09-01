@@ -7,6 +7,7 @@ Crossdock is in early public development. These documents describe the intended 
 - [`getting-started.md`](getting-started.md) — current development setup and project status.
 - [`testing/README.md`](testing/README.md) — automated vs live validation and reporting guidance.
 - [`testing/public-live-test.md`](testing/public-live-test.md) — provider-neutral desktop live-test steps for public testers.
+- [`testing/compatibility.md`](testing/compatibility.md) — dated public evidence for tested browser/OS/workflow combinations.
 
 ## Concepts
 
