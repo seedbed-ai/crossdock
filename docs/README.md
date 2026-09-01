@@ -14,6 +14,7 @@ Crossdock is in early public development. These documents describe the intended 
 - [`concepts/workflow.md`](concepts/workflow.md) — task lifecycle from prompt through PR handoff.
 - [`concepts/task-records.md`](concepts/task-records.md) — durable task metadata and configurable evidence retention.
 - [`concepts/adapters.md`](concepts/adapters.md) — provider boundary model.
+- [`concepts/agent-capabilities.md`](concepts/agent-capabilities.md) — provider-neutral work-item intents, first-class code review, persistence, and capability-advertising model.
 
 ## Configuration
 
