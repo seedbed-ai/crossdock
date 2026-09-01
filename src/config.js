@@ -52,7 +52,7 @@ export function validateConfig(config, { requireStorage = false } = {}) {
   const rawServiceUrl = Object.hasOwn(config, "service_url") ? config.service_url : DEFAULT_SERVICE_URL;
   const serviceUrl = normalizeServiceUrl(rawServiceUrl, "config.service_url");
   const publication = Object.hasOwn(config, "publication")
-    ? normalizePublication(config.publication, "config.publication", true)
+    ? validatePublicationPolicy(config.publication)
     : clone(DEFAULT_PUBLICATION);
   if (requireStorage && storage == null) throw new Error("task-record storage must be configured");
 
@@ -64,6 +64,10 @@ export function validateConfig(config, { requireStorage = false } = {}) {
     service_url: serviceUrl,
     publication,
   };
+}
+
+export function validatePublicationPolicy(value) {
+  return normalizePublication(value, "publication", true);
 }
 
 export function effectiveConfigSummary(config) {
