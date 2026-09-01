@@ -79,7 +79,9 @@ Set:
 - the private task-record repository and branch;
 - `Review before handoff` for the first run;
 - the prompt evidence policy;
-- the report evidence policy.
+- the report evidence policy;
+- the initial-PR provenance publication choice; and
+- the update provenance publication choice.
 
 Prompt and report evidence are independent. Current options are:
 
@@ -89,11 +91,20 @@ Prompt and report evidence are independent. Current options are:
 
 The effective evidence policy applies to the task being submitted and must not silently broaden during handoff.
 
+Publication is a separate choice. The current dashboard supports:
+
+- **Publish task-record link/comment** — retain the historical Crossdock link in the PR body or update comment; and
+- **Publish no Crossdock provenance** — keep the durable task record but do not add Crossdock provenance to that PR surface.
+
+The publication policy is captured when the task starts. Editing those selectors while a task is already active must not change that task's eventual publication behavior.
+
 The service URL is also captured when the task starts. As an optional recovery test, change the visible dashboard service URL after submission without stopping the original service. The active task must continue using its original frozen endpoint rather than redirecting recovery/handoff to the new preference.
 
 ## 6. Run a minimal initial task
 
 Use a deliberately small, reversible change in the disposable target repository, such as adding one harmless text file.
+
+For the baseline run, leave **Initial PR provenance** set to publish the task-record link.
 
 Capture the intended prompt with Crossdock and submit it to the coding agent. When the task becomes ready, review it before choosing **Finalize new PR**.
 
@@ -103,7 +114,7 @@ Record the exact non-secret failure state instead: dashboard message, visible pr
 
 ## 7. Verify the initial handoff
 
-A successful initial handoff should produce:
+A successful baseline initial handoff should produce:
 
 1. exactly one intended pull request;
 2. the expected target branch and change;
@@ -115,7 +126,7 @@ For `hash`, verify that plaintext is absent and the digest is present. For `omit
 
 ## 8. Run an update task
 
-Submit a second small task against the existing pull request.
+Submit a second small task against the existing pull request with **Update provenance** set to publish the task-record comment.
 
 Crossdock should:
 
@@ -127,11 +138,28 @@ Crossdock should:
 
 It must not rewrite the original PR body merely to append later provenance.
 
-## 9. Test automatic mode
+## 9. Exercise no-PR-visible provenance
+
+After the baseline initial/update flow succeeds, exercise publication independently from durable storage.
+
+For a new disposable task, choose **Publish no Crossdock provenance** for the applicable initial or update surface. Verify all of the following:
+
+1. the configured immutable task record is still created and remotely verifiable;
+2. the target code/branch/PR operation still completes;
+3. Crossdock does not add its task-record link to the initial PR body when initial publication is `none`;
+4. Crossdock does not create a provenance update comment when update publication is `none`;
+5. evidence retention still follows the independently selected `full`, `hash`, or `omit` policy; and
+6. the absence of PR-visible provenance is not reported as absence of the durable task record.
+
+As an optional frozen-policy recovery check, start a task with publication set one way, then change the visible selector before finalization. The active task must use the policy captured at submission rather than the newly edited preference.
+
+The shared configuration schema also reserves `summary` and committed-file publication modes, but the current browser/service path intentionally does not expose or execute those modes yet. Do not treat them as live-test requirements for this adapter.
+
+## 10. Test automatic mode
 
 After both review-mode flows work, repeat with automatic handoff enabled. The durable result should be equivalent; only the approval transition should differ.
 
-## 10. Failure cases worth reporting
+## 11. Failure cases worth reporting
 
 Useful live-test failures include:
 
@@ -144,6 +172,9 @@ Useful live-test failures include:
 - invalid/private-storage configuration;
 - invalid or mismatched loopback service port/URL;
 - task recovery switching to a newly edited service URL instead of its frozen endpoint;
+- task recovery switching to a newly edited publication preference instead of its frozen policy;
+- a task record missing because PR-visible publication was disabled;
+- a PR body/comment containing Crossdock provenance despite a `none` publication choice;
 - loopback service failure;
 - browser restart/task recovery problems;
 - evidence retained despite a `hash` or `omit` policy.
