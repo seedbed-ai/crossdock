@@ -1,19 +1,23 @@
 import { AGENT_CAPABILITIES_SCHEMA, validateAgentCapabilities } from "../../agent-capabilities.js";
 
 /**
- * Capabilities Crossdock currently implements through its experimental
- * ChatGPT/Codex Cloud browser adapter.
+ * Capabilities currently implemented by the experimental ChatGPT/Codex Cloud
+ * browser adapter.
  *
- * This is intentionally narrower than the full Codex product capability set.
- * A provider feature is not a supported Crossdock adapter capability until
- * Crossdock has the corresponding state, provenance, retry, and validation
- * behavior implemented and tested.
+ * The implementation intent remains experimental until dated authenticated
+ * live testing establishes compatibility with the current provider surfaces.
+ * Ordinary capability routing therefore rejects it unless the caller opts in
+ * to experimental capabilities explicitly.
  */
 export const CODEX_BROWSER_CAPABILITIES = validateAgentCapabilities({
   schema: AGENT_CAPABILITIES_SCHEMA,
   adapter: "codex-cloud-browser",
   provider: "codex",
   surface: "browser-cloud",
-  intents: ["implement"],
-  features: ["branch-mutation", "result-report"],
+  intents: {
+    implement: {
+      status: "experimental",
+      features: ["branch-mutation", "result-report"],
+    },
+  },
 });
