@@ -9,3 +9,4 @@ export { DEFAULT_SERVICE_URL, normalizeServiceUrl, parseServicePort } from "./se
 export { dispatchHandoff, hydrateTaskFromPullRequest } from "./service.js";
 export { TASK_RECORD_STORAGE_ADAPTER, createGitHubTaskRecordStorage, isTaskRecordStorageAdapter, resolveTaskRecordStorage } from "./storage.js";
 export { EVIDENCE_MODES, TASK_RECORD_SCHEMA, canonicalizeText, evidencePolicy, renderTaskRecord, sha256, taskRecordPath, validateTaskRecord } from "./task-record.js";
+export { TASK_RECORD_V3_ARTIFACT_TYPES, TASK_RECORD_V3_EVIDENCE_MODES, TASK_RECORD_V3_HANDOFF_PHASES, TASK_RECORD_V3_PUBLICATION_OUTCOMES, TASK_RECORD_V3_PUBLICATION_REQUESTS, TASK_RECORD_V3_SCHEMA, canonicalizeTaskRecordV3Evidence, parseTaskRecordV3, renderTaskRecordV3, sha256TaskRecordV3Evidence, validateTaskRecordV3Input, validateTaskRecordV3Metadata } from "./task-record-v3.js";
