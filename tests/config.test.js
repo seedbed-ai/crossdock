@@ -6,6 +6,7 @@ import {
   DEFAULT_CONFIG,
   DEFAULT_SERVICE_URL,
   PUBLICATION_PRESENTATIONS,
+  RECOVERY_PROMPT_MODES,
   effectiveConfigSummary,
   normalizeServiceUrl,
   resolveConfig,
@@ -23,10 +24,12 @@ test("defaults are explicit and immutable", () => {
     change_comment: "link",
     committed_file: null,
   });
+  assert.deepEqual(DEFAULT_CONFIG.recovery, { prompt: "persist" });
   assert.equal(DEFAULT_SERVICE_URL, "http://127.0.0.1:3210");
   assert.ok(Object.isFrozen(DEFAULT_CONFIG));
   assert.ok(Object.isFrozen(DEFAULT_CONFIG.evidence_policy));
   assert.ok(Object.isFrozen(DEFAULT_CONFIG.publication));
+  assert.ok(Object.isFrozen(DEFAULT_CONFIG.recovery));
 });
 
 test("scope precedence is global then provider then workspace then repository then task", () => {
@@ -36,6 +39,7 @@ test("scope precedence is global then provider then workspace then repository th
       evidence_policy: { prompt: "hash" },
       service_url: "http://127.0.0.1:3200",
       publication: { change_description: "summary" },
+      recovery: { prompt: "persist" },
     },
     provider: { evidence_policy: { report: "hash" }, publication: { change_comment: "none" } },
     workspace: { handoff_mode: "review", service_url: "http://127.0.0.1:3201" },
@@ -56,12 +60,14 @@ test("scope precedence is global then provider then workspace then repository th
       handoff_mode: "automatic",
       service_url: "http://127.0.0.1:4321",
       publication: { change_description: "none" },
+      recovery: { prompt: "memory" },
     },
   });
   assert.equal(config.handoff_mode, "automatic");
   assert.deepEqual(config.evidence_policy, { prompt: "omit", report: "omit" });
   assert.deepEqual(config.storage, { type: "github", repository: "example/records", branch: "main" });
   assert.equal(config.service_url, "http://127.0.0.1:4321");
+  assert.deepEqual(config.recovery, { prompt: "memory" });
   assert.deepEqual(config.publication, {
     change_description: "none",
     change_comment: "none",
@@ -94,11 +100,12 @@ test("higher scope can explicitly clear inherited storage and committed-file pub
   assert.equal(config.publication.committed_file, null);
 });
 
-test("partial evidence and publication layers preserve unrelated choices", () => {
+test("partial evidence, publication, and recovery layers preserve unrelated choices", () => {
   const config = resolveConfig({
     repository: {
       evidence_policy: { report: "hash" },
       publication: { change_comment: "summary" },
+      recovery: { prompt: "memory" },
     },
   });
   assert.deepEqual(config.evidence_policy, { prompt: "full", report: "hash" });
@@ -107,6 +114,7 @@ test("partial evidence and publication layers preserve unrelated choices", () =>
     change_comment: "summary",
     committed_file: null,
   });
+  assert.deepEqual(config.recovery, { prompt: "memory" });
 });
 
 test("resolved config does not mutate caller layers", () => {
@@ -114,6 +122,7 @@ test("resolved config does not mutate caller layers", () => {
     evidence_policy: { prompt: "omit" },
     storage: { repository: "example/records", branch: "main" },
     publication: { change_description: "none" },
+    recovery: { prompt: "memory" },
   };
   const snapshot = structuredClone(layer);
   resolveConfig({ task: layer });
@@ -125,15 +134,18 @@ test("unknown scope and config fields fail instead of being ignored", () => {
   assert.throws(() => resolveConfig({ global: { made_up: true } }), /unknown field: made_up/);
   assert.throws(() => resolveConfig({ global: { evidence_policy: { unknown: "omit" } } }), /unknown field: unknown/);
   assert.throws(() => resolveConfig({ global: { publication: { mystery: "none" } } }), /unknown field: mystery/);
+  assert.throws(() => resolveConfig({ global: { recovery: { report: "memory" } } }), /unknown field: report/);
 });
 
-test("invalid handoff, evidence, and publication modes fail clearly", () => {
+test("invalid handoff, evidence, publication, and recovery modes fail clearly", () => {
   assert.throws(() => resolveConfig({ task: { handoff_mode: "sometimes" } }), /handoff_mode/);
   assert.throws(() => resolveConfig({ task: { evidence_policy: { prompt: "sometimes" } } }), /evidence_policy.prompt/);
   assert.throws(() => resolveConfig({ task: { publication: { change_description: "sometimes" } } }), /change_description/);
   assert.throws(() => resolveConfig({ task: { publication: { committed_file: { presentation: "full", repository: "example/provenance", branch: "main", path_template: "crossdock/{task_id}.md" } } } }), /presentation/);
+  assert.throws(() => resolveConfig({ task: { recovery: { prompt: "encrypted" } } }), /recovery.prompt/);
   assert.deepEqual(PUBLICATION_PRESENTATIONS, ["link", "summary", "none"]);
   assert.deepEqual(COMMITTED_FILE_PRESENTATIONS, ["link", "reference"]);
+  assert.deepEqual(RECOVERY_PROMPT_MODES, ["persist", "memory"]);
 });
 
 test("GitHub storage normalizes type and validates destination", () => {
@@ -197,7 +209,7 @@ test("service URL accepts only an explicit numeric loopback origin", () => {
   ]) assert.throws(() => normalizeServiceUrl(invalid), /HTTP 127\.0\.0\.1 loopback origin with an explicit port/);
 });
 
-test("existing v1 config defaults newly introduced service URL and publication settings", () => {
+test("existing v1 config defaults newly introduced service URL, publication, and recovery settings", () => {
   const legacy = {
     schema: CONFIG_SCHEMA,
     handoff_mode: "review",
@@ -211,6 +223,7 @@ test("existing v1 config defaults newly introduced service URL and publication s
     change_comment: "link",
     committed_file: null,
   });
+  assert.deepEqual(validated.recovery, { prompt: "persist" });
   assert.throws(() => validateConfig({ ...legacy, service_url: null }), /config\.service_url is required/);
   assert.throws(() => validateConfig({ ...legacy, service_url: "" }), /config\.service_url is required/);
 });
@@ -228,6 +241,7 @@ test("effectiveConfigSummary exposes consequential choices without extra config 
       storage: { repository: "example/private-records", branch: "main" },
       service_url: "http://127.0.0.1:4321",
       publication: { change_description: "summary", change_comment: "none" },
+      recovery: { prompt: "memory" },
     },
   });
   assert.deepEqual(effectiveConfigSummary(config), {
@@ -241,5 +255,6 @@ test("effectiveConfigSummary exposes consequential choices without extra config 
       change_comment: "none",
       committed_file: null,
     },
+    recovery: { prompt: "memory" },
   });
 });
