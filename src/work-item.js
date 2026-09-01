@@ -1,3 +1,4 @@
+import { domainToASCII } from "node:url";
 import { requireIntentSupport, supportsAgentFeature, WORK_ITEM_INTENTS } from "./agent-capabilities.js";
 
 export const WORK_ITEM_REQUEST_SCHEMA = "crossdock.work-item-request/v1";
@@ -57,7 +58,7 @@ function normalizeSource(value, intent) {
 
   const source = {
     adapter: requireNonEmptyString(value.adapter, "source.adapter"),
-    host: requireNonEmptyString(value.host, "source.host"),
+    host: normalizeHost(value.host),
     repository: requireNonEmptyString(value.repository, "source.repository"),
     change: optionalNonEmptyString(value.change, "source.change"),
     version: optionalNonEmptyString(value.version, "source.version"),
@@ -68,6 +69,14 @@ function normalizeSource(value, intent) {
     if (!source.version) throw new Error("review source.version is required");
   }
   return source;
+}
+
+function normalizeHost(value) {
+  const host = requireNonEmptyString(value, "source.host");
+  if (/[:/\\@?#\s]/.test(host)) throw new Error("source.host must be a bare hostname");
+  const ascii = domainToASCII(host);
+  if (!ascii) throw new Error("source.host must be a valid hostname");
+  return ascii.toLowerCase();
 }
 
 function normalizeReview(value, intent) {
