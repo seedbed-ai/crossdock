@@ -48,7 +48,15 @@ Start the local service:
 npm start
 ```
 
-Leave it running during the test. It binds to loopback rather than a public network interface.
+The default service endpoint is `http://127.0.0.1:3210`. Leave it running during the test. It binds to the numeric loopback host rather than a public network interface.
+
+To exercise endpoint configuration, optionally use another port:
+
+```sh
+PORT=8787 npm start
+```
+
+Then use `http://127.0.0.1:8787` in the dashboard. The service rejects invalid `PORT` values, and the dashboard accepts only an explicit `http://127.0.0.1:<port>` origin. Do not replace the loopback host with another machine or remote service.
 
 ## 4. Load the extension
 
@@ -67,6 +75,7 @@ Authenticate normally to the conversation, coding-agent, and GitHub services you
 Set:
 
 - the disposable target repository;
+- the Crossdock service URL matching the local service port;
 - the private task-record repository and branch;
 - `Review before handoff` for the first run;
 - the prompt evidence policy;
@@ -79,6 +88,8 @@ Prompt and report evidence are independent. Current options are:
 - **omit** — store neither plaintext nor digest.
 
 The effective evidence policy applies to the task being submitted and must not silently broaden during handoff.
+
+The service URL is also captured when the task starts. As an optional recovery test, change the visible dashboard service URL after submission without stopping the original service. The active task must continue using its original frozen endpoint rather than redirecting recovery/handoff to the new preference.
 
 ## 6. Run a minimal initial task
 
@@ -108,7 +119,7 @@ Submit a second small task against the existing pull request.
 
 Crossdock should:
 
-1. snapshot the current PR head;
+1. snapshot the current PR head through the configured frozen service endpoint;
 2. use the coding agent's branch-update action;
 3. wait until GitHub reports a different head SHA;
 4. create a new immutable task record using the selected evidence policy; and
@@ -131,7 +142,9 @@ Useful live-test failures include:
 - failure to discover the created PR;
 - stale PR identity or unchanged branch head;
 - invalid/private-storage configuration;
-- localhost service failure;
+- invalid or mismatched loopback service port/URL;
+- task recovery switching to a newly edited service URL instead of its frozen endpoint;
+- loopback service failure;
 - browser restart/task recovery problems;
 - evidence retained despite a `hash` or `omit` policy.
 

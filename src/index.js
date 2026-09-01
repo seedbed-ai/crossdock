@@ -5,6 +5,7 @@ export { GitHubClient } from "./github-client.js";
 export { buildPrBody, buildUpdateComment, persistTaskRecord, publishExistingInitialHandoff, publishInitialHandoff, publishUpdateHandoff } from "./handoff.js";
 export { createHandoffServer } from "./http-server.js";
 export { assertGithubSafe } from "./security.js";
+export { DEFAULT_SERVICE_URL, normalizeServiceUrl, parseServicePort } from "./service-endpoint.js";
 export { dispatchHandoff, hydrateTaskFromPullRequest } from "./service.js";
 export { TASK_RECORD_STORAGE_ADAPTER, createGitHubTaskRecordStorage, isTaskRecordStorageAdapter, resolveTaskRecordStorage } from "./storage.js";
 export { EVIDENCE_MODES, TASK_RECORD_SCHEMA, canonicalizeText, evidencePolicy, renderTaskRecord, sha256, taskRecordPath, validateTaskRecord } from "./task-record.js";

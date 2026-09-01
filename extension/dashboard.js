@@ -1,5 +1,12 @@
+import {
+  DEFAULT_SERVICE_URL,
+  migrateActiveTaskServiceUrl,
+  normalizeServiceUrl,
+  postServiceJson,
+} from "./service-client.js";
+
 const $ = (id) => document.getElementById(id);
-const fields = ["repository", "issue", "pull-request", "handoff-mode", "storage-repository", "storage-branch", "prompt-evidence", "report-evidence", "summary", "validation", "prompt"];
+const fields = ["repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch", "prompt-evidence", "report-evidence", "summary", "validation", "prompt"];
 const POLL_MS = 5000;
 let taskState = null;
 let monitoring = false;
@@ -25,12 +32,16 @@ $("submit").addEventListener("click", run(async () => {
   if (taskState) throw new Error("a coding-agent task is already active");
   const prompt = $("prompt").value;
   if (!prompt.trim()) throw new Error("capture a prompt first");
+
   const repository = requireRepository();
+  const serviceUrl = requireServiceUrl();
   const storage = requireStorage();
   const evidencePolicy = readEvidencePolicy();
   const prNumber = parseOptionalPrNumber();
   const mode = prNumber ? "update" : "initial";
-  const initialSnapshot = mode === "update" ? await publish("/pr/snapshot", { target_repository: repository, pull_request: prNumber }) : null;
+  const initialSnapshot = mode === "update"
+    ? await publish("/pr/snapshot", { target_repository: repository, pull_request: prNumber }, serviceUrl)
+    : null;
 
   const pending = {
     task_id: `crossdock-${crypto.randomUUID()}`,
@@ -40,11 +51,13 @@ $("submit").addEventListener("click", run(async () => {
     handoff_mode: $("handoff-mode").value,
     evidence_policy: evidencePolicy,
     repository,
+    service_url: serviceUrl,
     storage,
     pull_request: prNumber,
     initial_head_sha: initialSnapshot?.head_sha ?? null,
     phase: "submitting",
   };
+
   const result = await send({ type: "crossdock.submitCodex", prompt });
   taskState = { ...pending, task_url: result.taskUrl, phase: "running" };
   await saveTaskState();
@@ -52,9 +65,19 @@ $("submit").addEventListener("click", run(async () => {
   void monitorTask();
 }));
 
-$("finalize-initial").addEventListener("click", run(async () => { requireReady("initial"); await finalizeInitial(); }));
-$("finalize-update").addEventListener("click", run(async () => { requireReady("update"); await finalizeUpdate(); }));
-for (const id of fields.filter((id) => id !== "prompt")) $(id).addEventListener("change", () => void persist());
+$("finalize-initial").addEventListener("click", run(async () => {
+  requireReady("initial");
+  await finalizeInitial();
+}));
+
+$("finalize-update").addEventListener("click", run(async () => {
+  requireReady("update");
+  await finalizeUpdate();
+}));
+
+for (const id of fields.filter((id) => id !== "prompt")) {
+  $(id).addEventListener("change", () => void persist());
+}
 
 async function monitorTask() {
   if (monitoring || !taskState) return;
@@ -75,6 +98,7 @@ async function monitorTask() {
           continue;
         }
       }
+
       if (taskState.phase === "pr-created") {
         try {
           await finishInitialAfterPrCreated();
@@ -85,6 +109,7 @@ async function monitorTask() {
           continue;
         }
       }
+
       if (taskState.phase === "branch-update-clicked") {
         try {
           await finishUpdateAfterRemoteChange();
@@ -95,6 +120,7 @@ async function monitorTask() {
           continue;
         }
       }
+
       if (!["running", "ready"].includes(taskState.phase)) return;
       if (taskState.phase === "ready" && taskState.handoff_mode === "review") return;
 
@@ -105,7 +131,8 @@ async function monitorTask() {
           taskState.phase = "ready";
           await saveTaskState();
           if (taskState.handoff_mode === "automatic") {
-            if (taskState.mode === "initial") await finalizeInitial(); else await finalizeUpdate();
+            if (taskState.mode === "initial") await finalizeInitial();
+            else await finalizeUpdate();
             continue;
           }
           setStatus(`Task is ready. Review the task and choose ${taskState.mode === "initial" ? "Finalize new PR" : "Finalize branch update"}.`);
@@ -117,7 +144,9 @@ async function monitorTask() {
       }
       await sleep(POLL_MS);
     }
-  } finally { monitoring = false; }
+  } finally {
+    monitoring = false;
+  }
 }
 
 async function finalizeInitial() {
@@ -126,6 +155,7 @@ async function finalizeInitial() {
   taskState.phase = "finalizing";
   await saveTaskState();
   setStatus("Creating PR and recording task provenance…");
+
   try {
     const result = await send({
       type: "crossdock.createPrAndInspect",
@@ -161,6 +191,7 @@ async function recoverInitialPrCreation() {
   requireTaskState("initial");
   if (taskState.phase !== "pr-create-uncertain") return false;
   if (!taskState.pr_discovery || !taskState.final_task_url) throw new Error("created PR recovery state is incomplete");
+
   const result = await send({
     type: "crossdock.recoverCreatedPr",
     targetRepository: taskState.repository,
@@ -185,12 +216,14 @@ async function finishInitialAfterPrCreated() {
   requireTaskState("initial");
   if (taskState.phase !== "pr-created") return;
   if (!taskState.pull_request || !taskState.final_pr_url || !taskState.final_task_url) throw new Error("created PR recovery state is incomplete");
+
   const result = { taskUrl: taskState.final_task_url, report: taskState.final_report };
   await publish("/handoff/initial", {
     storage: taskState.storage,
     task: buildTask({ repository: taskState.repository, prNumber: taskState.pull_request, result }),
     pr: buildDescription(),
   });
+
   const prNumber = taskState.pull_request;
   const prUrl = taskState.final_pr_url;
   await completeTask(prNumber);
@@ -201,7 +234,10 @@ async function finishInitialAfterPrCreated() {
 async function finalizeUpdate() {
   requireTaskState("update");
   if (!["running", "ready"].includes(taskState.phase)) throw new Error(`update task cannot finalize from phase ${taskState.phase}`);
-  taskState.phase = "finalizing"; await saveTaskState(); setStatus("Updating the PR branch and verifying the remote head…");
+  taskState.phase = "finalizing";
+  await saveTaskState();
+  setStatus("Updating the PR branch and verifying the remote head…");
+
   try {
     const result = await send({
       type: "crossdock.applyBranchUpdate",
@@ -226,14 +262,24 @@ async function finalizeUpdate() {
 async function finishUpdateAfterRemoteChange() {
   requireTaskState("update");
   if (taskState.phase !== "branch-update-clicked") return;
-  const changed = await waitForPrHeadChange({ repository: taskState.repository, prNumber: taskState.pull_request, previousSha: taskState.initial_head_sha });
+
+  const changed = await waitForPrHeadChange({
+    repository: taskState.repository,
+    prNumber: taskState.pull_request,
+    previousSha: taskState.initial_head_sha,
+  });
   const stored = await chrome.storage.local.get("parentTaskId");
   const result = { taskUrl: taskState.final_task_url, report: taskState.final_report };
+
   await publish("/handoff/update", {
     storage: taskState.storage,
-    task: { ...buildTask({ repository: taskState.repository, prNumber: taskState.pull_request, result }), parent_task_id: stored.parentTaskId ?? null },
+    task: {
+      ...buildTask({ repository: taskState.repository, prNumber: taskState.pull_request, result }),
+      parent_task_id: stored.parentTaskId ?? null,
+    },
     update: buildDescription(),
   });
+
   const prNumber = taskState.pull_request;
   await completeTask(prNumber);
   setStatus(`Branch update recorded on PR #${prNumber} at ${changed.head_sha.slice(0, 12)}.`);
@@ -290,6 +336,10 @@ function readEvidencePolicy() {
   return { prompt, report };
 }
 
+function requireServiceUrl() {
+  return normalizeServiceUrl($("service-url").value);
+}
+
 function requireStorage() {
   const repository = $("storage-repository").value.trim();
   const branch = $("storage-branch").value.trim();
@@ -299,11 +349,13 @@ function requireStorage() {
   return { repository, branch };
 }
 
-async function publish(path, body) {
-  const response = await fetch(`http://127.0.0.1:3210${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.message ?? payload.error ?? `handoff failed: ${response.status}`);
-  return payload;
+async function publish(path, body, explicitServiceUrl = null) {
+  return postServiceJson({
+    path,
+    body,
+    taskState: explicitServiceUrl ? null : taskState,
+    preference: explicitServiceUrl ?? $("service-url").value,
+  });
 }
 
 async function send(message) {
@@ -312,15 +364,84 @@ async function send(message) {
   return response.result;
 }
 
-function requireRepository() { const repository = $("repository").value.trim(); if (!/^[^/\s]+\/[^/\s]+$/.test(repository)) throw new Error("target repository must be owner/repo"); return repository; }
-function parseOptionalPrNumber() { const value = $("pull-request").value.trim(); if (!value) return null; const number = Number(value); if (!Number.isInteger(number) || number <= 0) throw new Error("existing PR must be a positive integer"); return number; }
-function parsePrNumber(url, repository) { const escaped = repository.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); const match = url.match(new RegExp(`github\\.com/${escaped}/pull/(\\d+)`)); if (!match) throw new Error("coding agent did not expose a PR URL for the target repository"); return Number(match[1]); }
-function requireTaskState(mode) { if (!taskState?.task_id || !taskState.prompt) throw new Error("no submitted task is active"); if (mode && taskState.mode !== mode) throw new Error(`active task is ${taskState.mode}, not ${mode}`); }
-function requireReady(mode) { requireTaskState(mode); if (taskState.phase !== "ready") throw new Error("task is not ready for handoff yet"); }
-function run(fn) { return async () => { setBusy(true); try { await fn(); } catch (error) { setStatus(error.message, true); } finally { setBusy(false); } }; }
-function setBusy(value) { for (const button of document.querySelectorAll("button")) button.disabled = value; }
-function setStatus(message, error = false) { $("status").textContent = message; $("status").dataset.error = error ? "true" : "false"; }
-async function saveTaskState() { await chrome.storage.local.set({ taskState }); }
-async function persist() { const values = Object.fromEntries(fields.map((id) => [id, $(id).value])); await chrome.storage.local.set({ dashboard: values }); }
-async function restore() { const stored = await chrome.storage.local.get(["dashboard", "taskState"]); for (const [id, value] of Object.entries(stored.dashboard ?? {})) if ($(id)) $(id).value = value; taskState = stored.taskState ?? null; if (taskState) { setStatus(`Recovered active ${taskState.mode} task in phase ${taskState.phase}.`); if (taskState.phase !== "ready" || taskState.handoff_mode === "automatic") void monitorTask(); } }
-function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+function requireRepository() {
+  const repository = $("repository").value.trim();
+  if (!/^[^/\s]+\/[^/\s]+$/.test(repository)) throw new Error("target repository must be owner/repo");
+  return repository;
+}
+
+function parseOptionalPrNumber() {
+  const value = $("pull-request").value.trim();
+  if (!value) return null;
+  const number = Number(value);
+  if (!Number.isInteger(number) || number <= 0) throw new Error("existing PR must be a positive integer");
+  return number;
+}
+
+function parsePrNumber(url, repository) {
+  const escaped = repository.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = url.match(new RegExp(`github\\.com/${escaped}/pull/(\\d+)`));
+  if (!match) throw new Error("coding agent did not expose a PR URL for the target repository");
+  return Number(match[1]);
+}
+
+function requireTaskState(mode) {
+  if (!taskState?.task_id || !taskState.prompt) throw new Error("no submitted task is active");
+  if (mode && taskState.mode !== mode) throw new Error(`active task is ${taskState.mode}, not ${mode}`);
+}
+
+function requireReady(mode) {
+  requireTaskState(mode);
+  if (taskState.phase !== "ready") throw new Error("task is not ready for handoff yet");
+}
+
+function run(fn) {
+  return async () => {
+    setBusy(true);
+    try {
+      await fn();
+    } catch (error) {
+      setStatus(error.message, true);
+    } finally {
+      setBusy(false);
+    }
+  };
+}
+
+function setBusy(value) {
+  for (const button of document.querySelectorAll("button")) button.disabled = value;
+}
+
+function setStatus(message, error = false) {
+  $("status").textContent = message;
+  $("status").dataset.error = error ? "true" : "false";
+}
+
+async function saveTaskState() {
+  await chrome.storage.local.set({ taskState });
+}
+
+async function persist() {
+  const values = Object.fromEntries(fields.map((id) => [id, $(id).value]));
+  await chrome.storage.local.set({ dashboard: values });
+}
+
+async function restore() {
+  const stored = await chrome.storage.local.get(["dashboard", "taskState"]);
+  for (const [id, value] of Object.entries(stored.dashboard ?? {})) {
+    if ($(id)) $(id).value = value;
+  }
+  if (!$("service-url").value.trim()) $("service-url").value = DEFAULT_SERVICE_URL;
+
+  const migration = migrateActiveTaskServiceUrl(stored.taskState ?? null);
+  taskState = migration.taskState;
+  if (!taskState) return;
+  if (migration.changed) await saveTaskState();
+
+  setStatus(`Recovered active ${taskState.mode} task in phase ${taskState.phase}.`);
+  if (taskState.phase !== "ready" || taskState.handoff_mode === "automatic") void monitorTask();
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
