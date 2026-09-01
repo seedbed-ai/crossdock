@@ -1,0 +1,5 @@
+# Default ownership for all files in Crossdock.
+# The main-branch ruleset requires Code Owner review for contributors,
+# while seedbed-ai-owner may use the configured ruleset bypass when the
+# one-person maintainer workflow would otherwise deadlock.
+* @seedbed-ai-owner
