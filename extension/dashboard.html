@@ -44,7 +44,13 @@
           <option value="omit">Store no report evidence</option>
         </select>
       </label>
-      <p class="wide">Evidence settings control durable task records. Hash-only keeps an integrity digest without plaintext. Omit stores neither plaintext nor digest for that evidence class.</p>
+      <label>Prompt crash recovery
+        <select id="prompt-recovery">
+          <option value="persist">Persist prompt locally for recovery</option>
+          <option value="memory">Keep prompt in memory only</option>
+        </select>
+      </label>
+      <p class="wide">Evidence settings control the durable task record. Prompt crash recovery is separate: memory-only prevents the prompt from being written to browser local storage, but a browser/dashboard restart cannot recover full or hash prompt evidence because the original prompt bytes are intentionally gone.</p>
       <label>Initial PR provenance
         <select id="change-description-publication">
           <option value="link">Publish task-record link</option>
