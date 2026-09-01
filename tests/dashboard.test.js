@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  DEFAULT_PUBLICATION_POLICY,
+  migrateActiveTaskPublication,
+  normalizeBrowserPublicationPolicy,
+} from "../extension/publication-client.js";
+import {
   DEFAULT_SERVICE_URL,
   migrateActiveTaskServiceUrl,
   normalizeServiceUrl,
@@ -54,6 +59,36 @@ test("existing active task endpoint is normalized without reading a new preferen
   assert.equal(resolveServiceUrl({ taskState: migrated.taskState, preference: "http://127.0.0.1:9999" }), "http://127.0.0.1:8787");
 });
 
+test("browser publication policy supports only currently executable link and none modes", () => {
+  assert.deepEqual(normalizeBrowserPublicationPolicy({
+    change_description: "none",
+    change_comment: "link",
+    committed_file: null,
+  }), {
+    change_description: "none",
+    change_comment: "link",
+    committed_file: null,
+  });
+  assert.throws(() => normalizeBrowserPublicationPolicy({ change_description: "summary", change_comment: "link", committed_file: null }), /link or none/);
+  assert.throws(() => normalizeBrowserPublicationPolicy({ change_description: "link", change_comment: "link", committed_file: { presentation: "reference" } }), /committed-file/);
+});
+
+test("legacy active tasks migrate to historical link publication behavior", () => {
+  const original = { task_id: "legacy-task", phase: "ready" };
+  const migrated = migrateActiveTaskPublication(original);
+  assert.equal(migrated.changed, true);
+  assert.deepEqual(migrated.taskState.publication, DEFAULT_PUBLICATION_POLICY);
+  assert.equal(original.publication, undefined);
+});
+
+test("existing active task publication is frozen and validated", () => {
+  const publication = { change_description: "none", change_comment: "none", committed_file: null };
+  const migrated = migrateActiveTaskPublication({ task_id: "task-1", publication });
+  assert.equal(migrated.changed, false);
+  assert.deepEqual(migrated.taskState.publication, publication);
+  assert.throws(() => migrateActiveTaskPublication({ task_id: "task-1", publication: { ...publication, change_comment: "summary" } }), /link or none/);
+});
+
 test("service client uses frozen task endpoint after preference changes", async () => {
   const calls = [];
   await postServiceJson({
@@ -69,7 +104,7 @@ test("service client uses frozen task endpoint after preference changes", async 
   assert.equal(calls[0].url, "http://127.0.0.1:8787/pr/snapshot");
 });
 
-test("dashboard restoration keeps recovered update requests on the frozen endpoint", async () => {
+test("dashboard restoration keeps recovered update requests on frozen endpoint and publication policy", async () => {
   const previous = { document: globalThis.document, chrome: globalThis.chrome, fetch: globalThis.fetch };
   const elements = makeDashboardElements();
   const storage = {
@@ -83,6 +118,8 @@ test("dashboard restoration keeps recovered update requests on the frozen endpoi
       "storage-branch": "main",
       "prompt-evidence": "full",
       "report-evidence": "full",
+      "change-description-publication": "none",
+      "change-comment-publication": "none",
       summary: "Update summary",
       validation: "tests passed",
       prompt: "Update the branch",
@@ -94,6 +131,7 @@ test("dashboard restoration keeps recovered update requests on the frozen endpoi
       mode: "update",
       handoff_mode: "review",
       evidence_policy: { prompt: "full", report: "full" },
+      publication: { change_description: "link", change_comment: "link", committed_file: null },
       repository: "example/repo",
       service_url: "http://127.0.0.1:8787",
       storage: { repository: "example/records", branch: "main" },
@@ -141,8 +179,9 @@ test("dashboard restoration keeps recovered update requests on the frozen endpoi
     await import(`${new URL("../extension/dashboard.js", import.meta.url).href}?recovery-test=${Date.now()}`);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // Preference changes after restore. The active task must retain 8787.
+    // Preferences change after restore. The active task must retain its frozen values.
     elements.get("service-url").value = "http://127.0.0.1:9999";
+    elements.get("change-comment-publication").value = "none";
     const finalize = elements.get("finalize-update").listeners.get("click");
     assert.equal(typeof finalize, "function");
     await finalize();
@@ -150,7 +189,13 @@ test("dashboard restoration keeps recovered update requests on the frozen endpoi
     assert.ok(fetchCalls.length >= 2);
     assert.ok(fetchCalls.every(({ url }) => url.startsWith("http://127.0.0.1:8787/")));
     assert.ok(fetchCalls.some(({ url }) => url.endsWith("/pr/snapshot")));
-    assert.ok(fetchCalls.some(({ url }) => url.endsWith("/handoff/update")));
+    const handoff = fetchCalls.find(({ url }) => url.endsWith("/handoff/update"));
+    assert.ok(handoff);
+    assert.deepEqual(JSON.parse(handoff.init.body).publication, {
+      change_description: "link",
+      change_comment: "link",
+      committed_file: null,
+    });
     assert.equal(storage.taskState, undefined);
   } finally {
     globalThis.document = previous.document;
@@ -163,7 +208,7 @@ function makeDashboardElements() {
   const ids = [
     "open-chatgpt", "open-codex", "open-github", "capture", "submit", "finalize-initial", "finalize-update",
     "repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch",
-    "prompt-evidence", "report-evidence", "summary", "validation", "prompt", "status",
+    "prompt-evidence", "report-evidence", "change-description-publication", "change-comment-publication", "summary", "validation", "prompt", "status",
   ];
   return new Map(ids.map((id) => [id, {
     value: "",
