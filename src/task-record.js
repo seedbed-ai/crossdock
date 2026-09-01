@@ -1,15 +1,7 @@
 import { createHash } from "node:crypto";
 
-export const TASK_LOG_SCHEMA = "crossdock.task-record/v2";
+export const TASK_RECORD_SCHEMA = "crossdock.task-record/v2";
 export const EVIDENCE_MODES = Object.freeze(["full", "hash", "omit"]);
-
-const FORBIDDEN_PATTERNS = [
-  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i,
-  /\bgh[pousr]_[A-Za-z0-9_]{20,}\b/,
-  /\bsk-[A-Za-z0-9_-]{20,}\b/,
-  /\bAKIA[0-9A-Z]{16}\b/,
-  /\b(?:password|passwd|api[_-]?key|access[_-]?token|secret)\s*[:=]\s*[^\s]{8,}/i,
-];
 
 export function canonicalizeText(value) {
   if (typeof value !== "string") throw new TypeError("text must be a string");
@@ -18,13 +10,6 @@ export function canonicalizeText(value) {
 
 export function sha256(value) {
   return createHash("sha256").update(canonicalizeText(value), "utf8").digest("hex");
-}
-
-export function assertGithubSafe(value, label = "content") {
-  const canonical = canonicalizeText(value);
-  for (const pattern of FORBIDDEN_PATTERNS) {
-    if (pattern.test(canonical)) throw new Error(`${label} appears to contain Forbidden-from-GitHub material`);
-  }
 }
 
 function quoteYaml(value) {
@@ -60,7 +45,6 @@ export function evidencePolicy(record) {
 function validateEvidence(record, field, mode) {
   if (mode === "omit") return;
   requireString(record, field);
-  if (mode === "full") assertGithubSafe(record[field], field);
 }
 
 export function validateTaskRecord(record) {
@@ -84,7 +68,7 @@ export function validateTaskRecord(record) {
   return record;
 }
 
-export function taskLogPath(record) {
+export function taskRecordPath(record) {
   validateTaskRecord(record);
   const completed = new Date(record.completed_at);
   const year = String(completed.getUTCFullYear());
@@ -103,11 +87,11 @@ function evidenceSection(record, field, title, mode) {
   return `\n## ${title}\n\n${canonicalizeText(record[field])}\n`;
 }
 
-export function renderTaskLog(record) {
+export function renderTaskRecord(record) {
   validateTaskRecord(record);
   const policy = evidencePolicy(record);
   const fields = [
-    ["schema", TASK_LOG_SCHEMA], ["task_id", record.task_id], ["task_type", record.task_type], ["status", "completed"],
+    ["schema", TASK_RECORD_SCHEMA], ["task_id", record.task_id], ["task_type", record.task_type], ["status", "completed"],
     ["created_at", record.created_at], ["completed_at", record.completed_at], ["target_repository", record.target_repository],
     ["base_branch", record.base_branch], ["working_branch", record.working_branch], ["pull_request", record.pull_request ?? null],
     ["issue", record.issue ?? null], ["agent_task_url", record.agent_task_url ?? record.codex_task_url ?? null],

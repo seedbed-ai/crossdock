@@ -2,7 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { TASK_RECORD_STORAGE_ADAPTER, createGitHubTaskRecordStorage, isTaskRecordStorageAdapter, resolveTaskRecordStorage } from "../src/storage.js";
 
-function conflict(status = 422) { const error = new Error("exists"); error.status = status; return error; }
+function conflict(status = 422) {
+  const error = new Error("exists");
+  error.status = status;
+  return error;
+}
 
 function githubMock() {
   let content = null;
@@ -42,6 +46,20 @@ test("GitHub storage persists an immutable record and returns stable adapter met
     url: "https://github.com/example/private-records/blob/commit-1/crossdock/tasks/task.md",
   });
   await assert.doesNotReject(storage.verifyImmutable({ path: result.path, version: result.version, expectedContent: result.content }));
+});
+
+test("GitHub storage rejects secret-like plaintext before file creation", async () => {
+  const github = githubMock();
+  const storage = createGitHubTaskRecordStorage({ github, repository: "example/private-records", branch: "main" });
+  await assert.rejects(
+    storage.persistImmutable({
+      path: "task.md",
+      content: "access_token=ghp_abcdefghijklmnopqrstuvwxyz123456",
+      message: "record task",
+    }),
+    /Forbidden-from-GitHub/,
+  );
+  assert.deepEqual(github.calls, []);
 });
 
 test("GitHub storage retry recovers only exact existing content", async () => {
