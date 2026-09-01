@@ -12,8 +12,9 @@ The shared model contains:
 - `evidence_policy.prompt`: `full`, `hash`, or `omit`;
 - `evidence_policy.report`: `full`, `hash`, or `omit`;
 - `storage`: `null` or a configured task-record storage destination. The first implemented storage kind is `github` with `repository` and `branch`;
-- `service_url`: the local loopback handoff-service origin used by the browser adapter; and
-- `publication`: where task-record provenance is presented outside the durable task-record store.
+- `service_url`: the local loopback handoff-service origin used by the browser adapter;
+- `publication`: where task-record provenance is presented outside the durable task-record store; and
+- `recovery.prompt`: whether prompt plaintext may be persisted locally for crash/restart recovery.
 
 The model is intentionally conservative: a setting should not appear as implemented merely because Product intends to support it later. Additional privacy, lifecycle, provider, storage, and UI settings can extend versioned configuration as their behavior becomes real.
 
@@ -28,7 +29,7 @@ The model is intentionally conservative: a setting should not appear as implemen
 5. repository settings;
 6. per-task settings.
 
-A more specific layer overrides only the fields it supplies. Partial evidence policy and publication policy are merged field-by-field, so a repository can change one presentation surface without accidentally changing evidence retention or another surface.
+A more specific layer overrides only the fields it supplies. Partial evidence, publication, and recovery policy are merged field-by-field, so a repository or task can change one choice without accidentally changing unrelated retention/publication behavior.
 
 A more specific layer can explicitly set `storage: null` to clear an inherited destination, and can set `publication.committed_file: null` to disable an inherited committed-file destination. A workflow that requires durable storage must fail clearly until another valid destination is selected.
 
@@ -52,13 +53,31 @@ The current compatibility defaults are:
     "change_description": "link",
     "change_comment": "link",
     "committed_file": null
+  },
+  "recovery": {
+    "prompt": "persist"
   }
 }
 ```
 
-The publication defaults preserve Crossdock's historical behavior while making it explicit rather than mandatory Product policy. Existing v1 configuration documents and active browser tasks that predate `publication` migrate to these compatibility defaults.
+The compatibility defaults preserve Crossdock's historical behavior while making publication and recovery persistence explicit rather than hidden implementation policy. Existing v1 configuration documents and active browser tasks that predate these fields migrate to the historical defaults.
 
 These are implementation defaults, not permanent product policy. User-facing clients should display consequential effective choices before durable persistence or external mutation. Future evidence may justify different defaults without removing supported alternatives.
+
+## Recovery persistence is separate from durable evidence
+
+`evidence_policy.prompt` answers what prompt evidence belongs in the immutable task record. `recovery.prompt` answers whether prompt plaintext may be written into transient browser-local state while an active task is recoverable.
+
+The first implemented prompt recovery modes are:
+
+- `persist` — allow active-task prompt plaintext to be stored in `chrome.storage.local` so a dashboard/browser restart can continue a task that still needs the original prompt bytes; and
+- `memory` — keep prompt plaintext only in the live dashboard JavaScript state after capture/submission and remove it from both persisted dashboard-form state and persisted active-task state.
+
+`memory` is intentionally a privacy/recoverability tradeoff, not an encryption feature. While the dashboard remains alive, Crossdock can complete normally using the in-memory prompt. After a restart, the prompt is intentionally unavailable. If durable prompt evidence is `full` or `hash`, Crossdock fails recovery clearly because it cannot truthfully reconstruct the missing original bytes. If durable prompt evidence is `omit`, recovery may continue without the prompt because the final task record does not require prompt plaintext or a prompt digest.
+
+Changing the visible recovery preference after a task starts does not alter that task's frozen recovery policy. Crossdock never silently turns `memory` into `persist` merely to make recovery succeed.
+
+This first slice covers prompt plaintext only. Report recovery persistence, encrypted/OS-secure recovery storage, retention windows, completed-task history, diagnostics, expiration, and deletion remain separate lifecycle work rather than being inferred from `recovery.prompt`.
 
 ## Publication and durable storage are separate
 
@@ -121,7 +140,7 @@ The Node service remains bound to `127.0.0.1`; its `PORT` environment variable m
 
 ## Strict validation
 
-Unknown scopes, unknown fields, unsupported enum values, malformed repositories, invalid service endpoints, unsafe committed-file templates, and unsupported storage/publication adapters fail instead of being ignored. This prevents a misspelled privacy, publication, or transport setting from silently falling back to broader behavior.
+Unknown scopes, unknown fields, unsupported enum values, malformed repositories, invalid service endpoints, unsafe committed-file templates, unsupported recovery modes, and unsupported storage/publication adapters fail instead of being ignored. This prevents a misspelled privacy, publication, recovery, or transport setting from silently falling back to broader behavior.
 
 Configuration parsers must not treat an unsupported future option as its nearest current equivalent. Preserve the user's requested value when possible, migrate it explicitly when a defined migration exists, or fail with an actionable explanation.
 
@@ -141,10 +160,10 @@ For compatibility, `type` may be omitted and currently normalizes to `github`. T
 
 ## Privacy and user agency
 
-Configuration is the user's statement of desired behavior. Crossdock must not silently retain more evidence, perform more automation, or select a broader publication/data destination than the resolved configuration says.
+Configuration is the user's statement of desired behavior. Crossdock must not silently retain more evidence, perform more automation, persist more recovery plaintext, or select a broader publication/data destination than the resolved configuration says.
 
-Durable evidence settings are not a complete data-lifecycle policy. Collection, transient processing, crash recovery, local history, diagnostics, expiration, deletion, encryption, and sharing are separate future configuration areas and must remain distinguishable as they are implemented.
+Durable evidence settings are not a complete data-lifecycle policy. Collection, transient processing, crash recovery, local history, diagnostics, expiration, deletion, encryption, and sharing are separate configuration areas and must remain distinguishable as they are implemented.
 
 ## Effective summary
 
-The core exposes `effectiveConfigSummary()` so user interfaces can show the consequential resolved choices without exposing unrelated internal configuration structure. The summary includes the effective service URL and publication policy because those choices change where task data or provenance may be sent. Desktop and mobile clients should use an equivalent effective-summary concept before a consequential action.
+The core exposes `effectiveConfigSummary()` so user interfaces can show the consequential resolved choices without exposing unrelated internal configuration structure. The summary includes the effective service URL, publication policy, and recovery policy because those choices change where task data may be sent or retained. Desktop and mobile clients should use an equivalent effective-summary concept before a consequential action.
