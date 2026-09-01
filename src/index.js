@@ -1,4 +1,4 @@
-export { AGENT_CAPABILITIES_SCHEMA, AGENT_FEATURES, WORK_ITEM_INTENTS, requireIntentSupport, supportsAgentFeature, supportsIntent, validateAgentCapabilities } from "./agent-capabilities.js";
+export { AGENT_CAPABILITIES_SCHEMA, AGENT_FEATURES, CAPABILITY_STATUSES, WORK_ITEM_INTENTS, intentCapabilityStatus, requireIntentSupport, supportsAgentFeature, supportsIntent, validateAgentCapabilities } from "./agent-capabilities.js";
 export { CODEX_BROWSER_CAPABILITIES } from "./adapters/codex/browser-capabilities.js";
 export { CONFIG_SCHEMA, CONFIG_SCOPES, DEFAULT_CONFIG, HANDOFF_MODES, effectiveConfigSummary, resolveConfig, validateConfig } from "./config.js";
 export { GitHubClient } from "./github-client.js";
