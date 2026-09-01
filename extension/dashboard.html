@@ -26,6 +26,8 @@
       <label>Handoff mode
         <select id="handoff-mode"><option value="review">Review before handoff</option><option value="automatic">Automatic</option></select>
       </label>
+      <label class="wide">Crossdock service URL <input id="service-url" value="http://127.0.0.1:3210" inputmode="url" autocomplete="off"></label>
+      <p class="wide">The browser adapter connects only to an HTTP loopback service on <code>127.0.0.1</code>. Change this when running the local service on a different port.</p>
       <label class="wide">Task-record repository <input id="storage-repository" placeholder="private owner/repo" autocomplete="off"></label>
       <label>Task-record branch <input id="storage-branch" value="main" autocomplete="off"></label>
       <label>Prompt evidence
