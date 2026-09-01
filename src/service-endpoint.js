@@ -3,30 +3,19 @@ export const DEFAULT_SERVICE_URL = "http://127.0.0.1:3210";
 /**
  * Normalize the browser-facing Crossdock service endpoint.
  *
- * The browser adapter is intentionally restricted to plain HTTP on the
- * numeric loopback host. Allowing arbitrary hosts would turn a convenience
- * setting into an exfiltration/SSRF boundary and would also exceed the
- * extension's declared host permissions.
+ * The accepted grammar is intentionally narrower than a generic URL:
+ * `http://127.0.0.1:<port>` with an optional trailing slash. Validating the
+ * raw form also preserves an explicitly written default HTTP port such as 80,
+ * which the WHATWG URL parser otherwise canonicalizes away.
  */
 export function normalizeServiceUrl(value, label = "service_url") {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${label} is required`);
-
-  let url;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error(`${label} must be a valid URL`);
+  const raw = value.trim();
+  const match = raw.match(/^http:\/\/127\.0\.0\.1:(\d+)\/?$/);
+  if (!match) {
+    throw new Error(`${label} must be an HTTP 127.0.0.1 loopback origin with an explicit port and no credentials, path, query, or fragment`);
   }
-
-  if (url.protocol !== "http:") throw new Error(`${label} must use http`);
-  if (url.hostname !== "127.0.0.1") throw new Error(`${label} must use the 127.0.0.1 loopback host`);
-  if (!url.port) throw new Error(`${label} must include an explicit port`);
-  const port = parseServicePort(url.port, `${label} port`);
-  if (url.username || url.password || url.search || url.hash) {
-    throw new Error(`${label} must not include credentials, query parameters, or fragments`);
-  }
-  if (url.pathname !== "/") throw new Error(`${label} must not include a path`);
-
+  const port = parseServicePort(match[1], `${label} port`);
   return `http://127.0.0.1:${port}`;
 }
 
