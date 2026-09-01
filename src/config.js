@@ -8,16 +8,20 @@ export const HANDOFF_MODES = Object.freeze(["review", "automatic"]);
 export const CONFIG_SCOPES = Object.freeze(["global", "provider", "workspace", "repository", "task"]);
 export const PUBLICATION_PRESENTATIONS = Object.freeze(["link", "summary", "none"]);
 export const COMMITTED_FILE_PRESENTATIONS = Object.freeze(["link", "reference"]);
+export const RECOVERY_PROMPT_MODES = Object.freeze(["persist", "memory"]);
 
-const CONFIG_FIELDS = new Set(["schema", "handoff_mode", "evidence_policy", "storage", "service_url", "publication"]);
+const CONFIG_FIELDS = new Set(["schema", "handoff_mode", "evidence_policy", "storage", "service_url", "publication", "recovery"]);
 const PUBLICATION_FIELDS = new Set(["change_description", "change_comment", "committed_file"]);
 const COMMITTED_FILE_FIELDS = new Set(["presentation", "adapter", "repository", "branch", "path_template"]);
+const RECOVERY_FIELDS = new Set(["prompt"]);
 
 const DEFAULT_PUBLICATION = {
   change_description: "link",
   change_comment: "link",
   committed_file: null,
 };
+
+const DEFAULT_RECOVERY = { prompt: "persist" };
 
 export const DEFAULT_CONFIG = deepFreeze({
   schema: CONFIG_SCHEMA,
@@ -26,6 +30,7 @@ export const DEFAULT_CONFIG = deepFreeze({
   storage: null,
   service_url: DEFAULT_SERVICE_URL,
   publication: DEFAULT_PUBLICATION,
+  recovery: DEFAULT_RECOVERY,
 });
 
 export function resolveConfig(scopes = {}) {
@@ -54,6 +59,9 @@ export function validateConfig(config, { requireStorage = false } = {}) {
   const publication = Object.hasOwn(config, "publication")
     ? validatePublicationPolicy(config.publication)
     : clone(DEFAULT_PUBLICATION);
+  const recovery = Object.hasOwn(config, "recovery")
+    ? normalizeRecovery(config.recovery, "config.recovery", true)
+    : clone(DEFAULT_RECOVERY);
   if (requireStorage && storage == null) throw new Error("task-record storage must be configured");
 
   return {
@@ -63,6 +71,7 @@ export function validateConfig(config, { requireStorage = false } = {}) {
     storage,
     service_url: serviceUrl,
     publication,
+    recovery,
   };
 }
 
@@ -83,6 +92,7 @@ export function effectiveConfigSummary(config) {
     },
     service_url: validated.service_url,
     publication: clone(validated.publication),
+    recovery: clone(validated.recovery),
   };
 }
 
@@ -100,6 +110,7 @@ function normalizeLayer(layer, scope) {
   if (Object.hasOwn(layer, "storage")) normalized.storage = normalizeStorage(layer.storage, `${scope}.storage`);
   if (Object.hasOwn(layer, "service_url")) normalized.service_url = normalizeServiceUrl(layer.service_url, `${scope}.service_url`);
   if (Object.hasOwn(layer, "publication")) normalized.publication = normalizePublication(layer.publication, `${scope}.publication`, false);
+  if (Object.hasOwn(layer, "recovery")) normalized.recovery = normalizeRecovery(layer.recovery, `${scope}.recovery`, false);
   return normalized;
 }
 
@@ -115,6 +126,19 @@ function normalizeEvidence(value, label, requireBoth) {
     if (!EVIDENCE_MODES.includes(value[field])) throw new Error(`${label}.${field} must be one of: ${EVIDENCE_MODES.join(", ")}`);
     result[field] = value[field];
   }
+  return result;
+}
+
+function normalizeRecovery(value, label, requireAll) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
+  assertKnownKeys(value, RECOVERY_FIELDS, label);
+  const result = {};
+  if (!Object.hasOwn(value, "prompt")) {
+    if (requireAll) throw new Error(`${label}.prompt is required`);
+    return result;
+  }
+  if (!RECOVERY_PROMPT_MODES.includes(value.prompt)) throw new Error(`${label}.prompt must be one of: ${RECOVERY_PROMPT_MODES.join(", ")}`);
+  result.prompt = value.prompt;
   return result;
 }
 
@@ -187,6 +211,7 @@ function mergeLayer(base, layer) {
   if (Object.hasOwn(layer, "storage")) next.storage = layer.storage == null ? null : clone(layer.storage);
   if (Object.hasOwn(layer, "service_url")) next.service_url = layer.service_url;
   if (Object.hasOwn(layer, "publication")) next.publication = { ...next.publication, ...clone(layer.publication) };
+  if (Object.hasOwn(layer, "recovery")) next.recovery = { ...next.recovery, ...clone(layer.recovery) };
   return next;
 }
 
