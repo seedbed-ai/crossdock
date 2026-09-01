@@ -45,6 +45,19 @@
         </select>
       </label>
       <p class="wide">Evidence settings control durable task records. Hash-only keeps an integrity digest without plaintext. Omit stores neither plaintext nor digest for that evidence class.</p>
+      <label>Initial PR provenance
+        <select id="change-description-publication">
+          <option value="link">Publish task-record link</option>
+          <option value="none">Publish no Crossdock provenance</option>
+        </select>
+      </label>
+      <label>Update provenance
+        <select id="change-comment-publication">
+          <option value="link">Publish task-record comment</option>
+          <option value="none">Publish no Crossdock provenance</option>
+        </select>
+      </label>
+      <p class="wide">Publication is separate from task-record storage. Choosing no PR-visible provenance does not disable the configured durable task record. These choices are frozen when a task starts so recovery cannot silently change publication behavior.</p>
       <label class="wide">PR / update summary <textarea id="summary" rows="3" placeholder="What changed and why?"></textarea></label>
       <label class="wide">Validation <textarea id="validation" rows="3" placeholder="One result per line"></textarea></label>
     </section>

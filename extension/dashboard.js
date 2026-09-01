@@ -1,4 +1,9 @@
 import {
+  DEFAULT_PUBLICATION_POLICY,
+  migrateActiveTaskPublication,
+  normalizeBrowserPublicationPolicy,
+} from "./publication-client.js";
+import {
   DEFAULT_SERVICE_URL,
   migrateActiveTaskServiceUrl,
   normalizeServiceUrl,
@@ -6,7 +11,7 @@ import {
 } from "./service-client.js";
 
 const $ = (id) => document.getElementById(id);
-const fields = ["repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch", "prompt-evidence", "report-evidence", "summary", "validation", "prompt"];
+const fields = ["repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch", "prompt-evidence", "report-evidence", "change-description-publication", "change-comment-publication", "summary", "validation", "prompt"];
 const POLL_MS = 5000;
 let taskState = null;
 let monitoring = false;
@@ -37,6 +42,7 @@ $("submit").addEventListener("click", run(async () => {
   const serviceUrl = requireServiceUrl();
   const storage = requireStorage();
   const evidencePolicy = readEvidencePolicy();
+  const publication = readPublicationPolicy();
   const prNumber = parseOptionalPrNumber();
   const mode = prNumber ? "update" : "initial";
   const initialSnapshot = mode === "update"
@@ -50,6 +56,7 @@ $("submit").addEventListener("click", run(async () => {
     mode,
     handoff_mode: $("handoff-mode").value,
     evidence_policy: evidencePolicy,
+    publication,
     repository,
     service_url: serviceUrl,
     storage,
@@ -220,6 +227,7 @@ async function finishInitialAfterPrCreated() {
   const result = { taskUrl: taskState.final_task_url, report: taskState.final_report };
   await publish("/handoff/initial", {
     storage: taskState.storage,
+    publication: taskState.publication,
     task: buildTask({ repository: taskState.repository, prNumber: taskState.pull_request, result }),
     pr: buildDescription(),
   });
@@ -273,6 +281,7 @@ async function finishUpdateAfterRemoteChange() {
 
   await publish("/handoff/update", {
     storage: taskState.storage,
+    publication: taskState.publication,
     task: {
       ...buildTask({ repository: taskState.repository, prNumber: taskState.pull_request, result }),
       parent_task_id: stored.parentTaskId ?? null,
@@ -334,6 +343,14 @@ function readEvidencePolicy() {
   const allowed = new Set(["full", "hash", "omit"]);
   if (!allowed.has(prompt) || !allowed.has(report)) throw new Error("invalid evidence policy");
   return { prompt, report };
+}
+
+function readPublicationPolicy() {
+  return normalizeBrowserPublicationPolicy({
+    change_description: $("change-description-publication").value,
+    change_comment: $("change-comment-publication").value,
+    committed_file: null,
+  });
 }
 
 function requireServiceUrl() {
@@ -432,11 +449,14 @@ async function restore() {
     if ($(id)) $(id).value = value;
   }
   if (!$("service-url").value.trim()) $("service-url").value = DEFAULT_SERVICE_URL;
+  if (!$("change-description-publication").value) $("change-description-publication").value = DEFAULT_PUBLICATION_POLICY.change_description;
+  if (!$("change-comment-publication").value) $("change-comment-publication").value = DEFAULT_PUBLICATION_POLICY.change_comment;
 
-  const migration = migrateActiveTaskServiceUrl(stored.taskState ?? null);
-  taskState = migration.taskState;
+  const serviceMigration = migrateActiveTaskServiceUrl(stored.taskState ?? null);
+  const publicationMigration = migrateActiveTaskPublication(serviceMigration.taskState);
+  taskState = publicationMigration.taskState;
   if (!taskState) return;
-  if (migration.changed) await saveTaskState();
+  if (serviceMigration.changed || publicationMigration.changed) await saveTaskState();
 
   setStatus(`Recovered active ${taskState.mode} task in phase ${taskState.phase}.`);
   if (taskState.phase !== "ready" || taskState.handoff_mode === "automatic") void monitorTask();

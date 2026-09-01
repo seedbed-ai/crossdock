@@ -56,7 +56,7 @@ The current compatibility defaults are:
 }
 ```
 
-The publication defaults preserve Crossdock's current behavior while making it explicit rather than mandatory Product policy. Existing v1 configuration documents that predate `publication` normalize to these compatibility defaults.
+The publication defaults preserve Crossdock's historical behavior while making it explicit rather than mandatory Product policy. Existing v1 configuration documents and active browser tasks that predate `publication` migrate to these compatibility defaults.
 
 These are implementation defaults, not permanent product policy. User-facing clients should display consequential effective choices before durable persistence or external mutation. Future evidence may justify different defaults without removing supported alternatives.
 
@@ -69,17 +69,21 @@ The current source-control presentation fields are provider-neutral concepts:
 - `change_description`: provenance presentation in the source change's durable description/body;
 - `change_comment`: provenance presentation in a durable source-change comment/update surface.
 
-Each supports:
+The shared configuration schema accepts:
 
 - `link` — publish a durable task-record link/reference;
-- `summary` — publish a bounded summary representation under the later publication adapter's safety rules; or
-- `none` — do not publish provenance on that surface.
+- `summary` — publish a bounded summary representation under publication-specific safety rules; or
+- `none` — do not publish Crossdock provenance on that surface.
 
-It is valid to set both source-change surfaces to `none` while retaining an immutable task record elsewhere. Completion must remain truthful about what was and was not published.
+The current browser + loopback-service execution path implements **`link` and `none`** for both source-change surfaces. It deliberately rejects `summary` before any publication or task-record mutation because summary construction/publication semantics are not implemented yet. The browser UI therefore exposes only `link` and `none` today rather than silently coercing unsupported choices.
+
+It is valid to set both source-change surfaces to `none` while retaining an immutable task record elsewhere. In that mode the current handoff still persists and remotely verifies the configured task record, but does not rewrite the initial PR body for Crossdock provenance and does not create an update provenance comment. Completion remains truthful about what was and was not published.
+
+Publication choices are frozen into active browser task state at submission. Editing the visible preference while a task is running must not change recovery or publication behavior for that already-started task.
 
 ### Committed-file publication
 
-`publication.committed_file` is either `null` or an explicit destination object. The initial implemented configuration accepts only the GitHub adapter:
+`publication.committed_file` is either `null` or an explicit destination object. The initial configuration contract accepts only the GitHub adapter:
 
 ```json
 {
@@ -91,11 +95,11 @@ It is valid to set both source-change surfaces to `none` while retaining an immu
 }
 ```
 
-`presentation` currently supports `link` and `reference`. Crossdock deliberately does not expose a retained-record/full-record committed-file mode yet because that requires a separate self-reference, classification, and immutable-identity design rather than silently copying task-record bytes into another GitHub path.
+`presentation` currently supports `link` and `reference` in the configuration contract. Crossdock deliberately does not expose a retained-record/full-record committed-file mode because that requires a separate self-reference, classification, and immutable-identity design rather than silently copying task-record bytes into another GitHub path.
 
-The path template must be repository-relative, may not traverse with `..`, and must contain `{task_id}` so independent task publications cannot collide by default. Actual publication still requires classification/secret preflight, retry/idempotency handling, remote verification, and mapping into the provider-neutral v3 publication/artifact contract before it can be considered implemented end-to-end.
+The path template must be repository-relative, may not traverse with `..`, and must contain `{task_id}` so independent task publications cannot collide by default.
 
-Configuration support therefore does not by itself mean the handoff service currently executes every configured publication destination. Unsupported execution combinations must fail clearly rather than being silently coerced back to the compatibility defaults.
+**Committed-file publication is not executed by the current handoff service yet.** A configured committed-file destination fails before durable or source-control mutation. Implementation still requires classification/secret preflight, retry/idempotency handling, independent remote verification, and mapping into the provider-neutral v3 publication/artifact contract.
 
 ## Loopback service URL
 

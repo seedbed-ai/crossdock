@@ -20,11 +20,11 @@ export async function dispatchHandoff({ method, path, body, github }) {
     const task = await hydrateTaskFromPullRequest(github, body.task);
 
     if (path === "/handoff/initial") {
-      const result = await publishExistingInitialHandoff({ github, storage: body.storage, task, pr: body.pr });
+      const result = await publishExistingInitialHandoff({ github, storage: body.storage, task, pr: body.pr, publication: body.publication });
       return { status: 200, body: summarizeInitial(result) };
     }
 
-    const result = await publishUpdateHandoff({ github, storage: body.storage, task, update: body.update });
+    const result = await publishUpdateHandoff({ github, storage: body.storage, task, update: body.update, publication: body.publication });
     return { status: 200, body: summarizeUpdate(result) };
   }
 
@@ -40,11 +40,21 @@ export async function hydrateTaskFromPullRequest(github, task) {
 }
 
 function summarizeInitial(result) {
-  return { pull_request: result.pullRequest.number, pull_request_url: result.pullRequest.html_url ?? result.pullRequest.url ?? null, task_record_url: result.taskRecord.url };
+  return {
+    pull_request: result.pullRequest.number,
+    pull_request_url: result.pullRequest.html_url ?? result.pullRequest.url ?? null,
+    task_record_url: result.taskRecord.url,
+    publication: result.publication,
+  };
 }
 
 function summarizeUpdate(result) {
-  return { comment_id: result.comment.id, comment_url: result.comment.html_url ?? result.comment.url ?? null, task_record_url: result.taskRecord.url };
+  return {
+    comment_id: result.comment?.id ?? null,
+    comment_url: result.comment?.html_url ?? result.comment?.url ?? null,
+    task_record_url: result.taskRecord.url,
+    publication: result.publication,
+  };
 }
 
 function requireObject(value, label) {
