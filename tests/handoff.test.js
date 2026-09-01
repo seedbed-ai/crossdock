@@ -170,6 +170,20 @@ test("secret-like PR summary fails before any GitHub mutation", async () => {
   assert.deepEqual(github.calls, []);
 });
 
+test("secret-like PR title or validation fails before any GitHub mutation", async () => {
+  for (const pr of [
+    { title: "password=not-for-github", summary: "safe" },
+    { title: "safe", summary: "safe", validation: ["api_key=not-for-github"] },
+  ]) {
+    const github = mockGithub();
+    await assert.rejects(
+      publishInitialHandoff({ github, storage, task: task({ evidence_policy: { prompt: "omit", report: "omit" } }), pr }),
+      /Forbidden-from-GitHub/,
+    );
+    assert.deepEqual(github.calls, []);
+  }
+});
+
 test("task-record retry reuses an exact immutable record", async () => {
   const github = mockGithub();
   const record = { ...task(), task_type: "initial", parent_task_id: null };
@@ -200,18 +214,23 @@ test("update handoff adds a new top-level comment without editing PR", async () 
   assert.ok(!github.calls.some(([name]) => name === "updatePullRequest"));
 });
 
-test("secret-like update summary fails before comment creation", async () => {
-  const github = mockGithub();
-  await assert.rejects(
-    publishUpdateHandoff({
-      github,
-      storage,
-      task: task({ task_id: "task-002", pull_request: 77, parent_task_id: "task-001", evidence_policy: { prompt: "omit", report: "omit" } }),
-      update: { summary: "password=not-for-github", validation: [] },
-    }),
-    /Forbidden-from-GitHub/,
-  );
-  assert.equal(github.calls.filter(([name]) => name === "addIssueComment").length, 0);
+test("secret-like update summary or validation fails before durable writes", async () => {
+  for (const update of [
+    { summary: "password=not-for-github", validation: [] },
+    { summary: "safe", validation: ["secret=not-for-github"] },
+  ]) {
+    const github = mockGithub();
+    await assert.rejects(
+      publishUpdateHandoff({
+        github,
+        storage,
+        task: task({ task_id: "task-002", pull_request: 77, parent_task_id: "task-001", evidence_policy: { prompt: "omit", report: "omit" } }),
+        update,
+      }),
+      /Forbidden-from-GitHub/,
+    );
+    assert.deepEqual(github.calls, []);
+  }
 });
 
 test("update retry reuses the exact existing task-record comment", async () => {
