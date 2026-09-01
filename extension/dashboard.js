@@ -1,7 +1,13 @@
+import {
+  DEFAULT_SERVICE_URL,
+  migrateActiveTaskServiceUrl,
+  normalizeServiceUrl,
+  postServiceJson,
+} from "./service-client.js";
+
 const $ = (id) => document.getElementById(id);
 const fields = ["repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch", "prompt-evidence", "report-evidence", "summary", "validation", "prompt"];
 const POLL_MS = 5000;
-const DEFAULT_SERVICE_URL = "http://127.0.0.1:3210";
 let taskState = null;
 let monitoring = false;
 
@@ -26,6 +32,7 @@ $("submit").addEventListener("click", run(async () => {
   if (taskState) throw new Error("a coding-agent task is already active");
   const prompt = $("prompt").value;
   if (!prompt.trim()) throw new Error("capture a prompt first");
+
   const repository = requireRepository();
   const serviceUrl = requireServiceUrl();
   const storage = requireStorage();
@@ -50,6 +57,7 @@ $("submit").addEventListener("click", run(async () => {
     initial_head_sha: initialSnapshot?.head_sha ?? null,
     phase: "submitting",
   };
+
   const result = await send({ type: "crossdock.submitCodex", prompt });
   taskState = { ...pending, task_url: result.taskUrl, phase: "running" };
   await saveTaskState();
@@ -57,9 +65,19 @@ $("submit").addEventListener("click", run(async () => {
   void monitorTask();
 }));
 
-$("finalize-initial").addEventListener("click", run(async () => { requireReady("initial"); await finalizeInitial(); }));
-$("finalize-update").addEventListener("click", run(async () => { requireReady("update"); await finalizeUpdate(); }));
-for (const id of fields.filter((id) => id !== "prompt")) $(id).addEventListener("change", () => void persist());
+$("finalize-initial").addEventListener("click", run(async () => {
+  requireReady("initial");
+  await finalizeInitial();
+}));
+
+$("finalize-update").addEventListener("click", run(async () => {
+  requireReady("update");
+  await finalizeUpdate();
+}));
+
+for (const id of fields.filter((id) => id !== "prompt")) {
+  $(id).addEventListener("change", () => void persist());
+}
 
 async function monitorTask() {
   if (monitoring || !taskState) return;
@@ -80,6 +98,7 @@ async function monitorTask() {
           continue;
         }
       }
+
       if (taskState.phase === "pr-created") {
         try {
           await finishInitialAfterPrCreated();
@@ -90,6 +109,7 @@ async function monitorTask() {
           continue;
         }
       }
+
       if (taskState.phase === "branch-update-clicked") {
         try {
           await finishUpdateAfterRemoteChange();
@@ -100,6 +120,7 @@ async function monitorTask() {
           continue;
         }
       }
+
       if (!["running", "ready"].includes(taskState.phase)) return;
       if (taskState.phase === "ready" && taskState.handoff_mode === "review") return;
 
@@ -110,7 +131,8 @@ async function monitorTask() {
           taskState.phase = "ready";
           await saveTaskState();
           if (taskState.handoff_mode === "automatic") {
-            if (taskState.mode === "initial") await finalizeInitial(); else await finalizeUpdate();
+            if (taskState.mode === "initial") await finalizeInitial();
+            else await finalizeUpdate();
             continue;
           }
           setStatus(`Task is ready. Review the task and choose ${taskState.mode === "initial" ? "Finalize new PR" : "Finalize branch update"}.`);
@@ -122,7 +144,9 @@ async function monitorTask() {
       }
       await sleep(POLL_MS);
     }
-  } finally { monitoring = false; }
+  } finally {
+    monitoring = false;
+  }
 }
 
 async function finalizeInitial() {
@@ -131,6 +155,7 @@ async function finalizeInitial() {
   taskState.phase = "finalizing";
   await saveTaskState();
   setStatus("Creating PR and recording task provenance…");
+
   try {
     const result = await send({
       type: "crossdock.createPrAndInspect",
@@ -166,6 +191,7 @@ async function recoverInitialPrCreation() {
   requireTaskState("initial");
   if (taskState.phase !== "pr-create-uncertain") return false;
   if (!taskState.pr_discovery || !taskState.final_task_url) throw new Error("created PR recovery state is incomplete");
+
   const result = await send({
     type: "crossdock.recoverCreatedPr",
     targetRepository: taskState.repository,
@@ -190,12 +216,14 @@ async function finishInitialAfterPrCreated() {
   requireTaskState("initial");
   if (taskState.phase !== "pr-created") return;
   if (!taskState.pull_request || !taskState.final_pr_url || !taskState.final_task_url) throw new Error("created PR recovery state is incomplete");
+
   const result = { taskUrl: taskState.final_task_url, report: taskState.final_report };
   await publish("/handoff/initial", {
     storage: taskState.storage,
     task: buildTask({ repository: taskState.repository, prNumber: taskState.pull_request, result }),
     pr: buildDescription(),
   });
+
   const prNumber = taskState.pull_request;
   const prUrl = taskState.final_pr_url;
   await completeTask(prNumber);
@@ -209,6 +237,7 @@ async function finalizeUpdate() {
   taskState.phase = "finalizing";
   await saveTaskState();
   setStatus("Updating the PR branch and verifying the remote head…");
+
   try {
     const result = await send({
       type: "crossdock.applyBranchUpdate",
@@ -233,14 +262,24 @@ async function finalizeUpdate() {
 async function finishUpdateAfterRemoteChange() {
   requireTaskState("update");
   if (taskState.phase !== "branch-update-clicked") return;
-  const changed = await waitForPrHeadChange({ repository: taskState.repository, prNumber: taskState.pull_request, previousSha: taskState.initial_head_sha });
+
+  const changed = await waitForPrHeadChange({
+    repository: taskState.repository,
+    prNumber: taskState.pull_request,
+    previousSha: taskState.initial_head_sha,
+  });
   const stored = await chrome.storage.local.get("parentTaskId");
   const result = { taskUrl: taskState.final_task_url, report: taskState.final_report };
+
   await publish("/handoff/update", {
     storage: taskState.storage,
-    task: { ...buildTask({ repository: taskState.repository, prNumber: taskState.pull_request, result }), parent_task_id: stored.parentTaskId ?? null },
+    task: {
+      ...buildTask({ repository: taskState.repository, prNumber: taskState.pull_request, result }),
+      parent_task_id: stored.parentTaskId ?? null,
+    },
     update: buildDescription(),
   });
+
   const prNumber = taskState.pull_request;
   await completeTask(prNumber);
   setStatus(`Branch update recorded on PR #${prNumber} at ${changed.head_sha.slice(0, 12)}.`);
@@ -298,19 +337,7 @@ function readEvidencePolicy() {
 }
 
 function requireServiceUrl() {
-  const value = $("service-url").value.trim();
-  let url;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error("Crossdock service URL must be a valid URL");
-  }
-  if (url.protocol !== "http:" || url.hostname !== "127.0.0.1") throw new Error("Crossdock service URL must use HTTP on 127.0.0.1");
-  if (!url.port) throw new Error("Crossdock service URL must include an explicit port");
-  const port = Number(url.port);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Crossdock service URL port must be between 1 and 65535");
-  if (url.username || url.password || url.search || url.hash || url.pathname !== "/") throw new Error("Crossdock service URL must contain only the loopback origin and explicit port");
-  return `http://127.0.0.1:${port}`;
+  return normalizeServiceUrl($("service-url").value);
 }
 
 function requireStorage() {
@@ -322,15 +349,13 @@ function requireStorage() {
   return { repository, branch };
 }
 
-async function publish(path, body, serviceUrl = taskState?.service_url ?? requireServiceUrl()) {
-  const response = await fetch(`${serviceUrl}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+async function publish(path, body, explicitServiceUrl = null) {
+  return postServiceJson({
+    path,
+    body,
+    taskState: explicitServiceUrl ? null : taskState,
+    preference: explicitServiceUrl ?? $("service-url").value,
   });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.message ?? payload.error ?? `handoff failed: ${response.status}`);
-  return payload;
 }
 
 async function send(message) {
@@ -403,18 +428,15 @@ async function persist() {
 
 async function restore() {
   const stored = await chrome.storage.local.get(["dashboard", "taskState"]);
-  for (const [id, value] of Object.entries(stored.dashboard ?? {})) if ($(id)) $(id).value = value;
+  for (const [id, value] of Object.entries(stored.dashboard ?? {})) {
+    if ($(id)) $(id).value = value;
+  }
   if (!$("service-url").value.trim()) $("service-url").value = DEFAULT_SERVICE_URL;
 
-  taskState = stored.taskState ?? null;
+  const migration = migrateActiveTaskServiceUrl(stored.taskState ?? null);
+  taskState = migration.taskState;
   if (!taskState) return;
-
-  // Tasks created by pre-service_url builds could only have used the historical
-  // fixed endpoint, so migration is deterministic rather than reading a mutable setting.
-  if (!taskState.service_url) {
-    taskState.service_url = DEFAULT_SERVICE_URL;
-    await saveTaskState();
-  }
+  if (migration.changed) await saveTaskState();
 
   setStatus(`Recovered active ${taskState.mode} task in phase ${taskState.phase}.`);
   if (taskState.phase !== "ready" || taskState.handoff_mode === "automatic") void monitorTask();
