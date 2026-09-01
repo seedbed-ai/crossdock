@@ -135,7 +135,7 @@ test("parser rejects noncanonical or incomplete metadata, tampering, and trailin
   const rendered = renderTaskRecordV3(reviewRecord());
   const parseText = (text) => parseTaskRecordV3(Buffer.from(text, "utf8"));
   assert.throws(() => parseText(rendered.replace('"task_id": "review-001"', '"task_id":"review-001"')), /front matter is not canonical/);
-  assert.throws(() => parseText(rendered.replace('"task_id": "review-001",', '"task_id": "other",\n  "task_id": "review-001",')), /front matter is not canonical/);
+  assert.throws(() => parseText(rendered.replace('  "task_id": "review-001"\n}', '  "task_id": "other",\n  "task_id": "review-001"\n}')), /front matter is not canonical/);
   const missingStatus = rendered.replace('  "status": "completed",\n', "");
   assert.throws(() => parseText(missingStatus), /(missing required field: status|front matter is not canonical)/);
   const noncanonicalHost = rendered.replace('"host": "github.com"', '"host": "GitHub.COM"');
