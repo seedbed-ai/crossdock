@@ -24,7 +24,7 @@ export async function publishInitialHandoff({ github, storage, task, pr }) {
   const destination = resolveTaskRecordStorage({ github, storage });
   const preflightRecord = { ...task, task_type: "initial", pull_request: null, parent_task_id: null };
   validateTaskRecord(preflightRecord);
-  preflightTaskRecordForDestination(destination, preflightRecord);
+  preflightTaskRecord(destination, preflightRecord);
   preflightPrDescription(pr);
 
   const provisionalBody = pr.provisionalBody ?? pr.summary;
@@ -98,11 +98,10 @@ export async function persistTaskRecord({ github, storage, record }) {
   const destination = resolveTaskRecordStorage({ github, storage });
   const path = taskRecordPath(record);
   const content = renderTaskRecord(record);
-  const persisted = await destination.persistImmutable({
-    path,
-    content,
-    message: `crossdock: record task ${record.task_id}`,
-  });
+  const input = { path, content, message: `crossdock: record task ${record.task_id}` };
+  if (typeof destination.preflightImmutable === "function") destination.preflightImmutable(input);
+
+  const persisted = await destination.persistImmutable(input);
   if (!persisted || typeof persisted !== "object") throw new Error("task-record storage adapter returned no persistence result");
   if (persisted.path !== path || persisted.content !== content) throw new Error("task-record storage adapter returned inconsistent persistence metadata");
   if (typeof persisted.version !== "string" || !persisted.version) throw new Error("task-record storage adapter returned no immutable version");
@@ -110,9 +109,11 @@ export async function persistTaskRecord({ github, storage, record }) {
   return persisted;
 }
 
-function preflightTaskRecordForDestination(destination, record) {
-  if (destination.type !== "github") return;
-  assertGithubSafe(renderTaskRecord(record), "task record");
+function preflightTaskRecord(destination, record) {
+  if (typeof destination.preflightImmutable !== "function") return;
+  const path = taskRecordPath(record);
+  const content = renderTaskRecord(record);
+  destination.preflightImmutable({ path, content, message: `crossdock: record task ${record.task_id}` });
 }
 
 function preflightPrDescription(pr) {
