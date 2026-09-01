@@ -25,6 +25,7 @@ export async function publishInitialHandoff({ github, storage, task, pr }) {
   const preflightRecord = { ...task, task_type: "initial", pull_request: null, parent_task_id: null };
   validateTaskRecord(preflightRecord);
   preflightTaskRecordForDestination(destination, preflightRecord);
+  preflightPrDescription(pr);
 
   const provisionalBody = pr.provisionalBody ?? pr.summary;
   assertGithubSafe(provisionalBody, "pull request body");
@@ -49,6 +50,7 @@ export async function publishExistingInitialHandoff({ github, storage, task, pr 
   const record = { ...task, task_type: "initial", parent_task_id: null };
   validateTaskRecord(record);
   if (!record.pull_request) throw new Error("existing initial handoff requires pull_request");
+  preflightPrDescription(pr);
 
   const persisted = await persistTaskRecord({ github, storage: destination, record });
   const body = buildPrBody({
@@ -71,6 +73,8 @@ export async function publishExistingInitialHandoff({ github, storage, task, pr 
 export async function publishUpdateHandoff({ github, storage, task, update }) {
   const destination = resolveTaskRecordStorage({ github, storage });
   const record = { ...task, task_type: "update" };
+  preflightDescription(update, "update");
+
   const persisted = await persistTaskRecord({ github, storage: destination, record });
   const commentBody = buildUpdateComment({ summary: update.summary, validation: update.validation, recordUrl: persisted.url, commit: task.result_commit });
   assertGithubSafe(commentBody, "pull request comment");
@@ -109,4 +113,17 @@ export async function persistTaskRecord({ github, storage, record }) {
 function preflightTaskRecordForDestination(destination, record) {
   if (destination.type !== "github") return;
   assertGithubSafe(renderTaskRecord(record), "task record");
+}
+
+function preflightPrDescription(pr) {
+  assertGithubSafe(String(pr?.title ?? ""), "pull request title");
+  preflightDescription(pr, "pull request");
+  if (pr?.provisionalBody != null) assertGithubSafe(String(pr.provisionalBody), "provisional pull request body");
+}
+
+function preflightDescription(description, label) {
+  assertGithubSafe(String(description?.summary ?? ""), `${label} summary`);
+  for (const item of description?.validation ?? []) {
+    assertGithubSafe(String(item), `${label} validation`);
+  }
 }
