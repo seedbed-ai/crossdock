@@ -1,3 +1,4 @@
+import { DEFAULT_CONFIG, validatePublicationPolicy } from "./config.js";
 import { assertGithubSafe } from "./security.js";
 import { resolveTaskRecordStorage } from "./storage.js";
 import { renderTaskRecord, taskRecordPath, validateTaskRecord } from "./task-record.js";
@@ -20,7 +21,10 @@ export function buildUpdateComment({ summary, validation = [], recordUrl, commit
   return `${lines.join("\n")}\n`;
 }
 
-export async function publishInitialHandoff({ github, storage, task, pr }) {
+export async function publishInitialHandoff({ github, storage, task, pr, publication }) {
+  const policy = resolvePublicationPolicy(publication);
+  preflightPublicationSupport(policy, "initial");
+
   const destination = resolveTaskRecordStorage({ github, storage });
   const preflightRecord = { ...task, task_type: "initial", pull_request: null, parent_task_id: null };
   validateTaskRecord(preflightRecord);
@@ -42,40 +46,57 @@ export async function publishInitialHandoff({ github, storage, task, pr }) {
     storage: destination,
     task: { ...task, pull_request: createdPr.number },
     pr,
+    publication: policy,
   });
 }
 
-export async function publishExistingInitialHandoff({ github, storage, task, pr }) {
+export async function publishExistingInitialHandoff({ github, storage, task, pr, publication }) {
+  const policy = resolvePublicationPolicy(publication);
+  const presentation = preflightPublicationSupport(policy, "initial");
   const destination = resolveTaskRecordStorage({ github, storage });
   const record = { ...task, task_type: "initial", parent_task_id: null };
   validateTaskRecord(record);
   if (!record.pull_request) throw new Error("existing initial handoff requires pull_request");
-  preflightPrDescription(pr);
+  if (presentation === "link") preflightPrDescription(pr);
 
   const persisted = await persistTaskRecord({ github, storage: destination, record });
-  const body = buildPrBody({
-    summary: pr.summary,
-    validation: pr.validation,
-    issue: task.issue,
-    recordUrl: persisted.url,
-    branch: task.working_branch,
-    commit: task.result_commit,
-  });
-  assertGithubSafe(body, "pull request body");
+  let verified;
 
-  await github.updatePullRequest(task.target_repository, record.pull_request, { body });
-  const verified = await github.getPullRequest(task.target_repository, record.pull_request);
-  if (!verified.body?.includes(persisted.url)) throw new Error("initial handoff verification failed: PR body does not link task record");
+  if (presentation === "link") {
+    const body = buildPrBody({
+      summary: pr.summary,
+      validation: pr.validation,
+      issue: task.issue,
+      recordUrl: persisted.url,
+      branch: task.working_branch,
+      commit: task.result_commit,
+    });
+    assertGithubSafe(body, "pull request body");
+
+    await github.updatePullRequest(task.target_repository, record.pull_request, { body });
+    verified = await github.getPullRequest(task.target_repository, record.pull_request);
+    if (!verified.body?.includes(persisted.url)) throw new Error("initial handoff verification failed: PR body does not link task record");
+  } else {
+    verified = await github.getPullRequest(task.target_repository, record.pull_request);
+  }
+
   await destination.verifyImmutable({ path: persisted.path, version: persisted.version, expectedContent: persisted.content });
-  return { pullRequest: verified, taskRecord: persisted };
+  return { pullRequest: verified, taskRecord: persisted, publication: { change_description: presentation } };
 }
 
-export async function publishUpdateHandoff({ github, storage, task, update }) {
+export async function publishUpdateHandoff({ github, storage, task, update, publication }) {
+  const policy = resolvePublicationPolicy(publication);
+  const presentation = preflightPublicationSupport(policy, "update");
   const destination = resolveTaskRecordStorage({ github, storage });
   const record = { ...task, task_type: "update" };
-  preflightDescription(update, "update");
+  if (presentation === "link") preflightDescription(update, "update");
 
   const persisted = await persistTaskRecord({ github, storage: destination, record });
+  if (presentation === "none") {
+    await destination.verifyImmutable({ path: persisted.path, version: persisted.version, expectedContent: persisted.content });
+    return { comment: null, taskRecord: persisted, publication: { change_comment: "none" } };
+  }
+
   const commentBody = buildUpdateComment({ summary: update.summary, validation: update.validation, recordUrl: persisted.url, commit: task.result_commit });
   assertGithubSafe(commentBody, "pull request comment");
 
@@ -91,7 +112,7 @@ export async function publishUpdateHandoff({ github, storage, task, update }) {
   const verifiedComment = comments.find((item) => item.id === comment.id && item.body === commentBody);
   if (!verifiedComment) throw new Error("update handoff verification failed: durable PR comment does not match expected task record linkage");
   await destination.verifyImmutable({ path: persisted.path, version: persisted.version, expectedContent: persisted.content });
-  return { comment: verifiedComment, taskRecord: persisted };
+  return { comment: verifiedComment, taskRecord: persisted, publication: { change_comment: "link" } };
 }
 
 export async function persistTaskRecord({ github, storage, record }) {
@@ -107,6 +128,23 @@ export async function persistTaskRecord({ github, storage, record }) {
   if (typeof persisted.version !== "string" || !persisted.version) throw new Error("task-record storage adapter returned no immutable version");
   if (typeof persisted.url !== "string" || !persisted.url) throw new Error("task-record storage adapter returned no durable URL");
   return persisted;
+}
+
+function resolvePublicationPolicy(publication) {
+  return validatePublicationPolicy(publication ?? DEFAULT_CONFIG.publication);
+}
+
+function preflightPublicationSupport(policy, phase) {
+  if (policy.committed_file != null) {
+    throw new Error("committed-file provenance publication is configured but not implemented by the current handoff service");
+  }
+
+  const field = phase === "initial" ? "change_description" : "change_comment";
+  const presentation = policy[field];
+  if (presentation === "summary") {
+    throw new Error(`${field} summary provenance publication is configured but not implemented by the current handoff service`);
+  }
+  return presentation;
 }
 
 function preflightTaskRecord(destination, record) {
