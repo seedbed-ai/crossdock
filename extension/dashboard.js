@@ -248,7 +248,6 @@ async function finishInitialAfterPrCreated() {
   const prNumber = taskState.pull_request;
   const prUrl = taskState.final_pr_url;
   await completeTask(prNumber);
-  await persist();
   setStatus(`Initial PR finalized: ${prUrl}`);
 }
 
@@ -324,6 +323,8 @@ async function completeTask(prNumber) {
   await chrome.storage.local.set({ parentTaskId: completedTaskId });
   await chrome.storage.local.remove("taskState");
   if (prNumber) $("pull-request").value = String(prNumber);
+  $("prompt").value = "";
+  await persist();
 }
 
 function buildTask({ repository, prNumber, result }) {
