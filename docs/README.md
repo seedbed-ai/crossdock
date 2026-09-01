@@ -32,8 +32,9 @@ Crossdock is in early public development. These documents describe the intended 
 ## Development and reference
 
 - [`development/repository-layout.md`](development/repository-layout.md) — source/test/docs organization and ownership boundaries.
-- [`reference/task-record-schema.md`](reference/task-record-schema.md) — current implemented task-record v2 schema.
-- [`reference/task-record-v3-proposal.md`](reference/task-record-v3-proposal.md) — proposed successor schema for review, remediation, verification, scheduling, families, publication policy, and typed durable artifacts.
+- [`reference/work-item-request.md`](reference/work-item-request.md) — implemented provider-neutral pre-delegation request and review preflight contract.
+- [`reference/task-record-schema.md`](reference/task-record-schema.md) — current production task-record v2 schema.
+- [`reference/task-record-v3-proposal.md`](reference/task-record-v3-proposal.md) — accepted v3 design and experimental codec contract for review, remediation, verification, scheduling, families, publication policy, and typed durable artifacts; production writers still emit v2.
 - [`reference/codex-capabilities.md`](reference/codex-capabilities.md) — dated mapping from current Codex features to Crossdock's provider-neutral capability model.
 - [`roadmap.md`](roadmap.md) — public development sequence.
 
