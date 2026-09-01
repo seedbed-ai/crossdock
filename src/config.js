@@ -1,4 +1,4 @@
-import { EVIDENCE_MODES } from "./task-log.js";
+import { EVIDENCE_MODES } from "./task-record.js";
 
 export const CONFIG_SCHEMA = "crossdock.config/v1";
 export const HANDOFF_MODES = Object.freeze(["review", "automatic"]);
