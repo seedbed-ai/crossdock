@@ -3,14 +3,20 @@ import { WORK_ITEM_INTENTS } from "./agent-capabilities.js";
 
 export const TASK_RECORD_V3_SCHEMA = "crossdock.task-record/v3";
 export const TASK_RECORD_V3_EVIDENCE_MODES = Object.freeze(["full", "hash", "omit"]);
-export const TASK_RECORD_V3_HANDOFF_PHASES = Object.freeze(["none", "initial-pr", "branch-update", "review-publication", "artifact-publication"]);
+export const TASK_RECORD_V3_HANDOFF_PHASES = Object.freeze(["none", "initial-change", "branch-update", "review-publication", "artifact-publication"]);
 export const TASK_RECORD_V3_PUBLICATION_REQUESTS = Object.freeze(["forbidden", "not-requested", "authorized"]);
 export const TASK_RECORD_V3_PUBLICATION_OUTCOMES = Object.freeze(["not-attempted", "published", "failed"]);
 
-const TOP_LEVEL_FIELDS = new Set([
+const INPUT_FIELDS = new Set([
   "task_id", "intent", "status", "created_at", "completed_at", "handoff_phase",
-  "parent_task_id", "causal_artifact", "family_id", "schedule_id", "schedule_occurrence",
-  "source", "agent", "evidence_policy", "request", "result", "publications", "artifacts", "recovery_state",
+  "parent_task_id", "parent_record", "causal_artifact", "family_id", "schedule_id", "schedule_occurrence",
+  "source", "origin", "agent", "evidence_policy", "request", "result", "publications", "artifacts", "recovery_state",
+]);
+
+const METADATA_FIELDS = new Set([
+  "schema", "task_id", "intent", "status", "created_at", "completed_at", "handoff_phase",
+  "parent_task_id", "parent_record", "causal_artifact", "family_id", "schedule_id", "schedule_occurrence",
+  "source", "origin", "agent", "evidence", "publications", "artifacts", "recovery_state",
 ]);
 
 /** Canonicalize retained evidence before hashing, byte-counting, or persistence. */
@@ -24,12 +30,9 @@ export function sha256TaskRecordV3Evidence(value) {
 }
 
 /**
- * Render an execution result into the proposed v3 wire format.
- *
- * v3 is intentionally isolated from the active v2 writer. Metadata is encoded
- * as canonical JSON inside YAML front matter (JSON is a YAML 1.2 subset), and
- * arbitrary full evidence is consumed by UTF-8 byte length rather than by
- * scanning for Markdown headings or terminators.
+ * Render the experimental v3 wire format without changing the active v2 writer.
+ * JSON is emitted inside YAML front matter because JSON is a YAML 1.2 subset;
+ * recursive key sorting gives this dependency-free prototype one exact grammar.
  */
 export function renderTaskRecordV3(record) {
   const normalized = validateTaskRecordV3Input(record);
@@ -43,11 +46,13 @@ export function renderTaskRecordV3(record) {
     completed_at: normalized.completed_at,
     handoff_phase: normalized.handoff_phase,
     parent_task_id: normalized.parent_task_id,
+    parent_record: normalized.parent_record,
     causal_artifact: normalized.causal_artifact,
     family_id: normalized.family_id,
     schedule_id: normalized.schedule_id,
     schedule_occurrence: normalized.schedule_occurrence,
     source: normalized.source,
+    origin: normalized.origin,
     agent: normalized.agent,
     evidence,
     publications: normalized.publications,
@@ -58,13 +63,12 @@ export function renderTaskRecordV3(record) {
   let output = `---\n${JSON.stringify(metadata, null, 2)}\n---\n`;
   for (const field of ["request", "result"]) {
     if (evidence[field].mode !== "full") continue;
-    const text = normalized[field];
-    output += `X-Crossdock-Evidence: ${field}; bytes=${evidence[field].bytes}\n${text}\n`;
+    output += `X-Crossdock-Evidence: ${field}; bytes=${evidence[field].bytes}\n${normalized[field]}\n`;
   }
   return output;
 }
 
-/** Parse and fully verify one v3 record without relying on Markdown headings. */
+/** Parse and fully verify one v3 record without scanning arbitrary evidence. */
 export function parseTaskRecordV3(value) {
   if (typeof value !== "string") throw new TypeError("task record must be a string");
   const bytes = Buffer.from(value, "utf8");
@@ -82,6 +86,12 @@ export function parseTaskRecordV3(value) {
   } catch {
     throw new Error("task record v3 front matter must use canonical JSON-compatible YAML");
   }
+
+  // Re-encoding must be byte-identical. This rejects reordered/noncanonical
+  // metadata and also prevents duplicate JSON keys from being accepted after
+  // JSON.parse() silently collapses them.
+  const canonicalMetadata = JSON.stringify(canonicalObject(metadata), null, 2);
+  if (canonicalMetadata !== metadataText) throw new Error("task record v3 front matter is not canonical");
   validateTaskRecordV3Metadata(metadata);
 
   let cursor = closeAt + closing.length;
@@ -93,8 +103,9 @@ export function parseTaskRecordV3(value) {
     const headerEnd = bytes.indexOf(0x0a, cursor);
     if (headerEnd < 0) throw new Error(`${field} evidence header is incomplete`);
     const header = bytes.subarray(cursor, headerEnd).toString("utf8");
-    const expectedHeader = `X-Crossdock-Evidence: ${field}; bytes=${descriptor.bytes}`;
-    if (header !== expectedHeader) throw new Error(`${field} evidence header does not match metadata`);
+    if (header !== `X-Crossdock-Evidence: ${field}; bytes=${descriptor.bytes}`) {
+      throw new Error(`${field} evidence header does not match metadata`);
+    }
 
     const start = headerEnd + 1;
     const end = start + descriptor.bytes;
@@ -116,43 +127,41 @@ export function parseTaskRecordV3(value) {
 
 export function validateTaskRecordV3Input(record) {
   if (!record || typeof record !== "object" || Array.isArray(record)) throw new TypeError("record is required");
-  assertKnownKeys(record, TOP_LEVEL_FIELDS, "record");
+  assertKnownKeys(record, INPUT_FIELDS, "record");
 
   const taskId = requireString(record.task_id, "task_id");
   if (!/^[A-Za-z0-9._-]+$/.test(taskId)) throw new Error("task_id may contain only letters, numbers, dot, underscore, and hyphen");
   const intent = requireEnum(record.intent, WORK_ITEM_INTENTS, "intent");
-  if ((record.status ?? "completed") !== "completed") throw new Error("v3 immutable task records currently support only completed status");
-  const createdAt = requireTimestamp(record.created_at, "created_at");
-  const completedAt = requireTimestamp(record.completed_at, "completed_at");
-  const handoffPhase = requireEnum(record.handoff_phase ?? "none", TASK_RECORD_V3_HANDOFF_PHASES, "handoff_phase");
+  if ((record.status ?? "completed") !== "completed") throw new Error("v3 immutable task records support only completed status");
 
-  const source = normalizeSource(record.source, intent, handoffPhase);
-  const agent = normalizeAgent(record.agent);
+  const parentTaskId = optionalString(record.parent_task_id, "parent_task_id");
+  const parentRecord = normalizeParentRecord(record.parent_record, parentTaskId);
+  const causalArtifact = optionalString(record.causal_artifact, "causal_artifact");
+  if (causalArtifact && !parentRecord) throw new Error("causal_artifact requires parent_record so its namespace is durable");
+
   const policy = normalizeEvidencePolicy(record.evidence_policy);
   const request = normalizeEvidenceInput(record.request, policy.request, "request");
   const result = normalizeEvidenceInput(record.result, policy.result, "result");
-  const publications = normalizePublications(record.publications ?? []);
   const artifacts = normalizeArtifacts(record.artifacts ?? []);
+  const publications = normalizePublications(record.publications ?? []);
   validatePublicationArtifactLinks(publications, artifacts);
-
-  const parentTaskId = optionalString(record.parent_task_id, "parent_task_id");
-  const causalArtifact = optionalString(record.causal_artifact, "causal_artifact");
-  if (causalArtifact && !parentTaskId) throw new Error("causal_artifact requires parent_task_id so its namespace is durable");
 
   return deepFreeze({
     task_id: taskId,
     intent,
     status: "completed",
-    created_at: createdAt,
-    completed_at: completedAt,
-    handoff_phase: handoffPhase,
+    created_at: requireTimestamp(record.created_at, "created_at"),
+    completed_at: requireTimestamp(record.completed_at, "completed_at"),
+    handoff_phase: requireEnum(record.handoff_phase ?? "none", TASK_RECORD_V3_HANDOFF_PHASES, "handoff_phase"),
     parent_task_id: parentTaskId,
+    parent_record: parentRecord,
     causal_artifact: causalArtifact,
     family_id: optionalString(record.family_id, "family_id"),
     schedule_id: optionalString(record.schedule_id, "schedule_id"),
     schedule_occurrence: optionalTimestamp(record.schedule_occurrence, "schedule_occurrence"),
-    source,
-    agent,
+    source: normalizeSource(record.source, intent, record.handoff_phase ?? "none"),
+    origin: normalizeOrigin(record.origin),
+    agent: normalizeAgent(record.agent),
     evidence_policy: policy,
     request,
     result,
@@ -164,16 +173,16 @@ export function validateTaskRecordV3Input(record) {
 
 export function validateTaskRecordV3Metadata(metadata) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) throw new TypeError("v3 metadata must be an object");
-  const allowed = new Set([
-    "schema", "task_id", "intent", "status", "created_at", "completed_at", "handoff_phase",
-    "parent_task_id", "causal_artifact", "family_id", "schedule_id", "schedule_occurrence",
-    "source", "agent", "evidence", "publications", "artifacts", "recovery_state",
-  ]);
-  assertKnownKeys(metadata, allowed, "v3 metadata");
+  assertKnownKeys(metadata, METADATA_FIELDS, "v3 metadata");
   if (metadata.schema !== TASK_RECORD_V3_SCHEMA) throw new Error(`schema must be ${TASK_RECORD_V3_SCHEMA}`);
+  if (!metadata.evidence || typeof metadata.evidence !== "object" || Array.isArray(metadata.evidence)) throw new Error("metadata.evidence is required");
+  assertKnownKeys(metadata.evidence, new Set(["request", "result"]), "metadata.evidence");
+  validateStoredEvidenceDescriptor(metadata.evidence.request, "request");
+  validateStoredEvidenceDescriptor(metadata.evidence.result, "result");
 
-  // Reuse input validation for all metadata that does not depend on raw evidence.
-  const skeleton = {
+  // Reuse structural validation with placeholder raw text. Stored digest/byte
+  // truth is checked independently above and against payload bytes in parser.
+  validateTaskRecordV3Input({
     task_id: metadata.task_id,
     intent: metadata.intent,
     status: metadata.status,
@@ -181,25 +190,24 @@ export function validateTaskRecordV3Metadata(metadata) {
     completed_at: metadata.completed_at,
     handoff_phase: metadata.handoff_phase,
     parent_task_id: metadata.parent_task_id,
+    parent_record: metadata.parent_record,
     causal_artifact: metadata.causal_artifact,
     family_id: metadata.family_id,
     schedule_id: metadata.schedule_id,
     schedule_occurrence: metadata.schedule_occurrence,
     source: metadata.source,
+    origin: metadata.origin,
     agent: metadata.agent,
     evidence_policy: {
-      request: metadata.evidence?.request?.mode,
-      result: metadata.evidence?.result?.mode,
+      request: metadata.evidence.request.mode,
+      result: metadata.evidence.result.mode,
     },
-    request: metadata.evidence?.request?.mode === "omit" ? undefined : "placeholder",
-    result: metadata.evidence?.result?.mode === "omit" ? undefined : "placeholder",
+    request: metadata.evidence.request.mode === "omit" ? undefined : "placeholder",
+    result: metadata.evidence.result.mode === "omit" ? undefined : "placeholder",
     publications: metadata.publications,
     artifacts: metadata.artifacts,
     recovery_state: metadata.recovery_state,
-  };
-  validateTaskRecordV3Input(skeleton);
-  validateStoredEvidenceDescriptor(metadata.evidence?.request, "request");
-  validateStoredEvidenceDescriptor(metadata.evidence?.result, "result");
+  });
   return metadata;
 }
 
@@ -211,11 +219,10 @@ function buildEvidenceMetadata(record) {
       result[field] = { mode, sha256: null, bytes: null };
       continue;
     }
-    const text = record[field];
     result[field] = {
       mode,
-      sha256: sha256TaskRecordV3Evidence(text),
-      bytes: mode === "full" ? Buffer.byteLength(text, "utf8") : null,
+      sha256: sha256TaskRecordV3Evidence(record[field]),
+      bytes: mode === "full" ? Buffer.byteLength(record[field], "utf8") : null,
     };
   }
   return canonicalObject(result);
@@ -223,25 +230,55 @@ function buildEvidenceMetadata(record) {
 
 function normalizeSource(source, intent, handoffPhase) {
   if (!source || typeof source !== "object" || Array.isArray(source)) throw new Error("source is required");
-  assertKnownKeys(source, new Set(["adapter", "host", "repository", "pull_request", "base_ref", "working_ref", "target_commit", "result_commit"]), "source");
-  const normalized = {
+  assertKnownKeys(source, new Set(["adapter", "host", "repository_id", "change_id", "base_ref", "working_ref", "target_version", "result_version"]), "source");
+  const normalized = canonicalObject({
     adapter: requireString(source.adapter, "source.adapter"),
-    host: requireString(source.host, "source.host"),
-    repository: requireString(source.repository, "source.repository"),
-    pull_request: optionalPositiveInteger(source.pull_request, "source.pull_request"),
+    host: requireHost(source.host, "source.host"),
+    repository_id: requireString(source.repository_id, "source.repository_id"),
+    change_id: optionalString(source.change_id, "source.change_id"),
     base_ref: optionalString(source.base_ref, "source.base_ref"),
     working_ref: optionalString(source.working_ref, "source.working_ref"),
-    target_commit: requireString(source.target_commit, "source.target_commit"),
-    result_commit: optionalString(source.result_commit, "source.result_commit"),
-  };
-  if (/^https?:\/\//i.test(normalized.host) || normalized.host.includes("/")) throw new Error("source.host must be a host name without scheme or path");
-  if (!/^[^/\s]+\/[^/\s]+$/.test(normalized.repository)) throw new Error("source.repository must be owner/repo");
-  if (intent === "review" && !normalized.pull_request) throw new Error("review requires source.pull_request");
-  if (handoffPhase === "initial-pr" && (!normalized.base_ref || !normalized.working_ref)) throw new Error("initial-pr requires source.base_ref and source.working_ref");
-  if (handoffPhase === "branch-update" && (!normalized.pull_request || !normalized.working_ref || !normalized.result_commit)) {
-    throw new Error("branch-update requires source.pull_request, source.working_ref, and source.result_commit");
+    target_version: requireString(source.target_version, "source.target_version"),
+    result_version: optionalString(source.result_version, "source.result_version"),
+  });
+  if (intent === "review" && !normalized.change_id) throw new Error("review requires source.change_id");
+  if (handoffPhase === "initial-change" && (!normalized.base_ref || !normalized.working_ref)) {
+    throw new Error("initial-change requires source.base_ref and source.working_ref");
   }
-  return canonicalObject(normalized);
+  if (handoffPhase === "branch-update" && (!normalized.change_id || !normalized.working_ref || !normalized.result_version)) {
+    throw new Error("branch-update requires source.change_id, source.working_ref, and source.result_version");
+  }
+  return normalized;
+}
+
+function normalizeOrigin(origin) {
+  if (origin == null) return null;
+  if (typeof origin !== "object" || Array.isArray(origin)) throw new Error("origin must be an object or null");
+  assertKnownKeys(origin, new Set(["adapter", "host", "type", "id", "url"]), "origin");
+  return canonicalObject({
+    adapter: requireString(origin.adapter, "origin.adapter"),
+    host: requireHost(origin.host, "origin.host"),
+    type: requireString(origin.type, "origin.type"),
+    id: requireString(origin.id, "origin.id"),
+    url: optionalString(origin.url, "origin.url"),
+  });
+}
+
+function normalizeParentRecord(parentRecord, parentTaskId) {
+  if (!parentTaskId) {
+    if (parentRecord != null) throw new Error("parent_record requires parent_task_id");
+    return null;
+  }
+  if (!parentRecord || typeof parentRecord !== "object" || Array.isArray(parentRecord)) throw new Error("parent_task_id requires parent_record");
+  assertKnownKeys(parentRecord, new Set(["storage_adapter", "locator", "version", "sha256"]), "parent_record");
+  const digest = requireString(parentRecord.sha256, "parent_record.sha256");
+  if (!/^[0-9a-f]{64}$/.test(digest)) throw new Error("parent_record.sha256 must be lowercase SHA-256");
+  return canonicalObject({
+    storage_adapter: requireString(parentRecord.storage_adapter, "parent_record.storage_adapter"),
+    locator: requireString(parentRecord.locator, "parent_record.locator"),
+    version: optionalString(parentRecord.version, "parent_record.version"),
+    sha256: digest,
+  });
 }
 
 function normalizeAgent(agent) {
@@ -275,13 +312,13 @@ function normalizeEvidenceInput(value, mode, field) {
 function normalizePublications(values) {
   if (!Array.isArray(values)) throw new Error("publications must be an array");
   const ids = new Set();
-  return deepFreeze(values.map((value, index) => {
+  const normalized = values.map((value, index) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`publications[${index}] must be an object`);
     assertKnownKeys(value, new Set(["publication_id", "destination_adapter", "destination_host", "target", "payload_class", "representation", "visibility", "authority", "requested", "outcome", "artifact_id"]), `publications[${index}]`);
     const publication = canonicalObject({
       publication_id: requireString(value.publication_id, `publications[${index}].publication_id`),
       destination_adapter: requireString(value.destination_adapter, `publications[${index}].destination_adapter`),
-      destination_host: requireString(value.destination_host, `publications[${index}].destination_host`),
+      destination_host: requireHost(value.destination_host, `publications[${index}].destination_host`),
       target: requireString(value.target, `publications[${index}].target`),
       payload_class: requireEnum(value.payload_class, ["request", "result", "summary", "finding"], `publications[${index}].payload_class`),
       representation: requireEnum(value.representation, TASK_RECORD_V3_EVIDENCE_MODES, `publications[${index}].representation`),
@@ -297,21 +334,24 @@ function normalizePublications(values) {
     if (publication.requested !== "authorized" && publication.artifact_id) throw new Error(`${publication.publication_id} cannot reference an artifact without authorization`);
     if (publication.outcome === "published" && !publication.artifact_id) throw new Error(`${publication.publication_id} published outcome requires artifact_id`);
     if (publication.outcome !== "published" && publication.artifact_id) throw new Error(`${publication.publication_id} may reference artifact_id only when published`);
+    if (publication.representation === "omit" && publication.outcome !== "not-attempted") throw new Error(`${publication.publication_id} cannot publish an omitted payload`);
     return publication;
-  }));
+  });
+  normalized.sort((a, b) => a.publication_id.localeCompare(b.publication_id));
+  return deepFreeze(normalized);
 }
 
 function normalizeArtifacts(values) {
   if (!Array.isArray(values)) throw new Error("artifacts must be an array");
   const ids = new Set();
-  return deepFreeze(values.map((value, index) => {
+  const normalized = values.map((value, index) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`artifacts[${index}] must be an object`);
     assertKnownKeys(value, new Set(["artifact_id", "type", "adapter", "host", "remote_id", "url", "target", "version", "verification"]), `artifacts[${index}]`);
     const artifact = canonicalObject({
       artifact_id: requireString(value.artifact_id, `artifacts[${index}].artifact_id`),
       type: requireString(value.type, `artifacts[${index}].type`),
       adapter: requireString(value.adapter, `artifacts[${index}].adapter`),
-      host: requireString(value.host, `artifacts[${index}].host`),
+      host: requireHost(value.host, `artifacts[${index}].host`),
       remote_id: requireString(value.remote_id, `artifacts[${index}].remote_id`),
       url: requireString(value.url, `artifacts[${index}].url`),
       target: requireString(value.target, `artifacts[${index}].target`),
@@ -322,7 +362,9 @@ function normalizeArtifacts(values) {
     if (ids.has(artifact.artifact_id)) throw new Error(`duplicate artifact_id: ${artifact.artifact_id}`);
     ids.add(artifact.artifact_id);
     return artifact;
-  }));
+  });
+  normalized.sort((a, b) => a.artifact_id.localeCompare(b.artifact_id));
+  return deepFreeze(normalized);
 }
 
 function validatePublicationArtifactLinks(publications, artifacts) {
@@ -351,6 +393,12 @@ function canonicalObject(value) {
   return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalObject(value[key])]));
 }
 
+function requireHost(value, label) {
+  const host = requireString(value, label);
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(host) || host.includes("/") || /\s/.test(host)) throw new Error(`${label} must be a host name without scheme, path, or whitespace`);
+  return host;
+}
+
 function requireString(value, label) {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${label} is required`);
   return value;
@@ -369,12 +417,6 @@ function requireTimestamp(value, label) {
 
 function optionalTimestamp(value, label) {
   return value == null ? null : requireTimestamp(value, label);
-}
-
-function optionalPositiveInteger(value, label) {
-  if (value == null) return null;
-  if (!Number.isInteger(value) || value <= 0) throw new Error(`${label} must be a positive integer`);
-  return value;
 }
 
 function requireEnum(value, allowed, label) {
