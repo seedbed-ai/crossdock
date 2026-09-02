@@ -38,6 +38,17 @@
       <label>Handoff mode
         <select id="handoff-mode"><option value="review">Review before handoff</option><option value="automatic">Automatic</option></select>
       </label>
+      <label>Work intent
+        <select id="work-intent" aria-describedby="work-intent-help">
+          <option value="implement">Implementation — experimental</option>
+          <option value="review" disabled>Code review — unsupported</option>
+          <option value="investigate" disabled>Investigation — unsupported</option>
+          <option value="triage" disabled>Triage — unsupported</option>
+          <option value="remediate" disabled>Remediation — unsupported</option>
+          <option value="verify" disabled>Verification — unsupported</option>
+        </select>
+      </label>
+      <p id="work-intent-help">The current Codex browser adapter only advertises implementation, and that path remains experimental until authenticated compatibility testing verifies it. Disabled intents are represented by the core model but are not executable through this browser surface yet.</p>
       <label class="wide">Crossdock service URL <input id="service-url" value="http://127.0.0.1:3210" inputmode="url" autocomplete="off"></label>
       <p class="wide">The browser adapter connects only to an HTTP loopback service on <code>127.0.0.1</code>. Change this when running the local service on a different port.</p>
       <label class="wide">Task-record repository <input id="storage-repository" placeholder="private owner/repo" autocomplete="off"></label>
