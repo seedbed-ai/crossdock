@@ -2,6 +2,7 @@ import { DEFAULT_CONFIG, validatePublicationPolicy } from "./config.js";
 import { assertGithubSafe } from "./security.js";
 import { resolveTaskRecordStorage } from "./storage.js";
 import { renderTaskRecord, taskRecordPath, validateTaskRecord } from "./task-record.js";
+import { prepareCommittedFilePublication, publishCommittedFile } from "./committed-file-publication.js";
 
 export function buildPrBody({ summary, validation = [], issue, recordUrl, branch, commit }) {
   const lines = ["## Summary", "", summary.trim(), ""];
@@ -28,6 +29,7 @@ export async function publishInitialHandoff({ github, storage, task, pr, publica
   const destination = resolveTaskRecordStorage({ github, storage });
   const preflightRecord = { ...task, task_type: "initial", pull_request: null, parent_task_id: null };
   validateTaskRecord(preflightRecord);
+  prepareCommittedFilePublication(policy.committed_file, preflightRecord);
   preflightTaskRecord(destination, preflightRecord);
   preflightPrDescription(pr);
 
@@ -57,9 +59,12 @@ export async function publishExistingInitialHandoff({ github, storage, task, pr,
   const record = { ...task, task_type: "initial", parent_task_id: null };
   validateTaskRecord(record);
   if (!record.pull_request) throw new Error("existing initial handoff requires pull_request");
+  const committedFile = prepareCommittedFilePublication(policy.committed_file, record);
   if (presentation === "link") preflightPrDescription(pr);
 
   const persisted = await persistTaskRecord({ github, storage: destination, record });
+  await destination.verifyImmutable({ path: persisted.path, version: persisted.version, expectedContent: persisted.content });
+  const committedResult = await publishCommittedFile({ github, prepared: committedFile, task: record, recordUrl: persisted.url });
   let verified;
 
   if (presentation === "link") {
@@ -73,15 +78,15 @@ export async function publishExistingInitialHandoff({ github, storage, task, pr,
     });
     assertGithubSafe(body, "pull request body");
 
-    await github.updatePullRequest(task.target_repository, record.pull_request, { body });
+    const current = await github.getPullRequest(task.target_repository, record.pull_request);
+    if (current.body !== body) await github.updatePullRequest(task.target_repository, record.pull_request, { body });
     verified = await github.getPullRequest(task.target_repository, record.pull_request);
     if (!verified.body?.includes(persisted.url)) throw new Error("initial handoff verification failed: PR body does not link task record");
   } else {
     verified = await github.getPullRequest(task.target_repository, record.pull_request);
   }
 
-  await destination.verifyImmutable({ path: persisted.path, version: persisted.version, expectedContent: persisted.content });
-  return { pullRequest: verified, taskRecord: persisted, publication: { change_description: presentation } };
+  return { pullRequest: verified, taskRecord: persisted, publication: publicationResult("change_description", presentation, committedResult) };
 }
 
 export async function publishUpdateHandoff({ github, storage, task, update, publication }) {
@@ -89,12 +94,15 @@ export async function publishUpdateHandoff({ github, storage, task, update, publ
   const presentation = preflightPublicationSupport(policy, "update");
   const destination = resolveTaskRecordStorage({ github, storage });
   const record = { ...task, task_type: "update" };
+  validateTaskRecord(record);
+  const committedFile = prepareCommittedFilePublication(policy.committed_file, record);
   if (presentation === "link") preflightDescription(update, "update");
 
   const persisted = await persistTaskRecord({ github, storage: destination, record });
+  await destination.verifyImmutable({ path: persisted.path, version: persisted.version, expectedContent: persisted.content });
+  const committedResult = await publishCommittedFile({ github, prepared: committedFile, task: record, recordUrl: persisted.url });
   if (presentation === "none") {
-    await destination.verifyImmutable({ path: persisted.path, version: persisted.version, expectedContent: persisted.content });
-    return { comment: null, taskRecord: persisted, publication: { change_comment: "none" } };
+    return { comment: null, taskRecord: persisted, publication: publicationResult("change_comment", "none", committedResult) };
   }
 
   const commentBody = buildUpdateComment({ summary: update.summary, validation: update.validation, recordUrl: persisted.url, commit: task.result_commit });
@@ -111,8 +119,7 @@ export async function publishUpdateHandoff({ github, storage, task, update, publ
   const comments = await github.getIssueComments(task.target_repository, task.pull_request);
   const verifiedComment = comments.find((item) => item.id === comment.id && item.body === commentBody);
   if (!verifiedComment) throw new Error("update handoff verification failed: durable PR comment does not match expected task record linkage");
-  await destination.verifyImmutable({ path: persisted.path, version: persisted.version, expectedContent: persisted.content });
-  return { comment: verifiedComment, taskRecord: persisted, publication: { change_comment: "link" } };
+  return { comment: verifiedComment, taskRecord: persisted, publication: publicationResult("change_comment", "link", committedResult) };
 }
 
 export async function persistTaskRecord({ github, storage, record }) {
@@ -135,16 +142,16 @@ function resolvePublicationPolicy(publication) {
 }
 
 function preflightPublicationSupport(policy, phase) {
-  if (policy.committed_file != null) {
-    throw new Error("committed-file provenance publication is configured but not implemented by the current handoff service");
-  }
-
   const field = phase === "initial" ? "change_description" : "change_comment";
   const presentation = policy[field];
   if (presentation === "summary") {
     throw new Error(`${field} summary provenance publication is configured but not implemented by the current handoff service`);
   }
   return presentation;
+}
+
+function publicationResult(field, presentation, committedFile) {
+  return { [field]: presentation, ...(committedFile == null ? {} : { committed_file: committedFile }) };
 }
 
 function preflightTaskRecord(destination, record) {

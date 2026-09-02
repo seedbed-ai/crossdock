@@ -21,7 +21,7 @@ The public repository currently contains:
 - a deterministic task-record and GitHub handoff core;
 - a task-record storage adapter boundary with a GitHub-backed adapter;
 - independently configurable prompt/report evidence retention (`full`, `hash`, or `omit`);
-- independently configurable PR-body/update-comment provenance presentation (`link` or `none`) while durable task-record storage remains required by the current handoff path;
+- independently configurable PR-body/update-comment provenance presentation (`link` or `none`) and core/service GitHub committed-file provenance (`link` or `reference`) while durable task-record storage remains required by the current handoff path;
 - independently configurable prompt and provider-report crash-recovery persistence (`persist` or `memory`) in the browser dashboard;
 - idempotent immutable-record and update-comment retry handling;
 - a shared configuration resolver with explicit scope precedence;
@@ -31,7 +31,7 @@ The public repository currently contains:
 - public live-test, compatibility, architecture, configuration, security, release-policy, development, and contribution documentation; and
 - GitHub Actions validation for the Node/JavaScript surfaces.
 
-The browser adapter currently executes `link` and `none` provenance choices for initial PR descriptions and later update comments. `summary` and committed-file publication remain intentionally unimplemented until their safety/idempotency semantics are complete. The adapter remains fail-closed and experimental until authenticated live compatibility testing establishes current provider behavior.
+The core and loopback service execute explicit GitHub committed-file provenance destinations with create-or-identical, no-overwrite verification. The browser adapter currently executes `link` and `none` provenance choices only for initial PR descriptions and later update comments; it does not expose committed-file configuration and remains fail-closed for that surface. `summary` also remains unimplemented. The adapter remains fail-closed and experimental until authenticated live compatibility testing establishes current provider behavior.
 
 ## Ways to help right now
 

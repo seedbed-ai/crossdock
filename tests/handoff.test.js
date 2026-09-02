@@ -125,7 +125,7 @@ test("initial handoff persists configured record and verifies", async () => {
   assert.equal(result.pullRequest.number, 77);
   assert.equal(result.taskRecord.url, "https://github.com/example/private-task-records/blob/abc123/crossdock/tasks/example/project/2026/08/task-001.md");
   assert.match(result.pullRequest.body, /Task record:/);
-  assert.deepEqual(github.calls.map(([name]) => name), ["createPullRequest", "createFile", "updatePullRequest", "getPullRequest", "getFile"]);
+  assert.deepEqual(github.calls.map(([name]) => name), ["createPullRequest", "createFile", "getFile", "getPullRequest", "updatePullRequest", "getPullRequest"]);
 });
 
 test("GitHub-backed full evidence is preflighted before PR creation", async () => {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { GitHubClient } from "../src/github-client.js";
+import { GitHubClient, decodeGitHubFileContent } from "../src/github-client.js";
 function response(status, payload) { return { ok: status >= 200 && status < 300, status, async text() { return payload == null ? "" : JSON.stringify(payload); } }; }
 
 test("GitHubClient creates UTF-8 files with base64 content", async () => {
@@ -31,4 +31,10 @@ test("GitHubClient rejects missing commit lookup results", async () => {
 test("GitHubClient exposes GitHub error status and payload", async () => {
   const client = new GitHubClient({ token: "test-token", fetchImpl: async () => response(422, { message: "Validation Failed" }) });
   await assert.rejects(client.getPullRequest("example/project", 1), (error) => error.status === 422 && error.payload.message === "Validation Failed");
+});
+
+test("GitHub file content decoding handles wrapped base64 and rejects malformed payloads", () => {
+  assert.equal(decodeGitHubFileContent({ encoding: "base64", content: "aGVs\nbG8=" }).toString("utf8"), "hello");
+  assert.throws(() => decodeGitHubFileContent({ encoding: "utf-8", content: "hello" }), /base64 content/);
+  assert.throws(() => decodeGitHubFileContent({ encoding: "base64", content: "%%%=" }), /malformed base64/);
 });
