@@ -2,11 +2,13 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-height: 100vh; background: Canvas; color: CanvasText; }
 button, input, textarea, select { font: inherit; border: 1px solid color-mix(in srgb, CanvasText 22%, transparent); border-radius: 12px; }
-button { min-height: 44px; padding: .7rem 1rem; cursor: pointer; background: color-mix(in srgb, Canvas 88%, CanvasText 12%); color: CanvasText; }
+button, input, select { min-height: 44px; }
+button { padding: .7rem 1rem; cursor: pointer; background: color-mix(in srgb, Canvas 88%, CanvasText 12%); color: CanvasText; }
 button:hover { background: color-mix(in srgb, Canvas 82%, CanvasText 18%); }
 button:disabled { opacity: .55; cursor: wait; }
 button.primary { font-weight: 700; }
 input, textarea, select { width: 100%; padding: .72rem .8rem; background: Canvas; color: CanvasText; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
 textarea { resize: vertical; }
 label { display: grid; gap: .45rem; font-weight: 650; }
 .shell { width: min(1080px, 100%); margin: 0 auto; padding: clamp(1rem, 3vw, 2rem); display: grid; gap: 1.25rem; }
@@ -21,5 +23,5 @@ h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.5rem); letter-spacing: -.045em; }
 .wide { grid-column: 1 / -1; }
 .prompt { display: grid; gap: .5rem; }
 @media (max-width: 700px) { .shell { padding: 1rem; } .hero { align-items: start; flex-direction: column; } #status { width: 100%; } .grid { grid-template-columns: 1fr; } .wide { grid-column: auto; } .surfaces, .actions { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 430px) { .surfaces, .actions { grid-template-columns: 1fr; } button { min-height: 48px; } }
+@media (max-width: 430px) { .surfaces, .actions { grid-template-columns: 1fr; } button, input, select { min-height: 48px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
