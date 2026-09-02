@@ -5,6 +5,7 @@ import { taskStateViewModel, renderTaskState } from "../extension/task-state-vie
 test("active task view exposes operational metadata without evidence content", () => {
   const model = taskStateViewModel({
     task_id: "crossdock-secret-id",
+    intent: "implement",
     mode: "update",
     phase: "branch-update-clicked",
     repository: "example/repo",
@@ -15,6 +16,7 @@ test("active task view exposes operational metadata without evidence content", (
     evidence_policy: { prompt: "full", report: "full" },
   });
   assert.deepEqual(model, {
+    intent: "Implementation",
     mode: "update",
     phase: "branch-update-clicked",
     repository: "example/repo",
@@ -33,7 +35,7 @@ test("render toggles idle and active state using textContent only", () => {
   const elements = new Map([
     ["active-task-empty", { hidden: false }],
     ["active-task-details", { hidden: true }],
-    ...["mode", "phase", "repository", "pull-request", "handoff-mode"].map((id) => [`active-task-${id}`, { textContent: "" }]),
+    ...["intent", "mode", "phase", "repository", "pull-request", "handoff-mode"].map((id) => [`active-task-${id}`, { textContent: "" }]),
   ]);
   const documentRef = { getElementById(id) { return elements.get(id); } };
 

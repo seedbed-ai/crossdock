@@ -152,11 +152,11 @@ function okResponse(body) {
 function makeDashboardElements() {
   const ids = [
     "open-chatgpt", "open-codex", "open-github", "capture", "submit", "finalize-initial", "finalize-update",
-    "repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch",
+    "repository", "issue", "pull-request", "handoff-mode", "work-intent", "service-url", "storage-repository", "storage-branch",
     "prompt-evidence", "report-evidence", "prompt-recovery", "report-recovery", "change-description-publication", "change-comment-publication", "committed-file-publication", "committed-file-repository", "committed-file-branch", "committed-file-path-template",
     "summary", "validation", "prompt", "status",
   ];
-  return new Map(ids.map((id) => [id, {
+  const elements = new Map(ids.map((id) => [id, {
     value: "",
     textContent: "",
     dataset: {},
@@ -164,4 +164,6 @@ function makeDashboardElements() {
     listeners: new Map(),
     addEventListener(type, listener) { this.listeners.set(type, listener); },
   }]));
+  elements.get("work-intent").value = "implement";
+  return elements;
 }

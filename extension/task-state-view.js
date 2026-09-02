@@ -2,6 +2,7 @@ export function taskStateViewModel(taskState) {
   if (!taskState) return null;
   if (typeof taskState !== "object" || Array.isArray(taskState)) throw new TypeError("active task state must be an object");
   return Object.freeze({
+    intent: taskState.intent === "implement" ? "Implementation" : "Unsupported",
     mode: taskState.mode ?? "unknown",
     phase: taskState.phase ?? "unknown",
     repository: taskState.repository ?? "unknown",

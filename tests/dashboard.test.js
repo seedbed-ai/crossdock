@@ -248,13 +248,42 @@ test("dashboard restoration keeps recovered update requests on frozen endpoint a
   }
 });
 
+test("dashboard restoration fails closed for an explicitly unsupported active intent", async () => {
+  const previous = { document: globalThis.document, chrome: globalThis.chrome, fetch: globalThis.fetch };
+  const elements = makeDashboardElements();
+  const storage = { taskState: {
+    task_id: "task-review", intent: "review", mode: "update", phase: "running", pull_request: 7,
+    service_url: "http://127.0.0.1:3210", publication: DEFAULT_PUBLICATION_POLICY,
+    recovery: { prompt: "persist", report: "persist" },
+  } };
+  let providerActions = 0;
+  globalThis.document = { getElementById: (id) => elements.get(id) ?? null, querySelectorAll: () => [] };
+  globalThis.chrome = {
+    runtime: { async sendMessage() { providerActions += 1; return { ok: true, result: {} }; } },
+    storage: { local: {
+      async get(keys) { const list = Array.isArray(keys) ? keys : [keys]; return Object.fromEntries(list.filter((key) => Object.hasOwn(storage, key)).map((key) => [key, structuredClone(storage[key])])); },
+      async set(values) { Object.assign(storage, structuredClone(values)); },
+      async remove(key) { delete storage[key]; },
+    } },
+  };
+  globalThis.fetch = async () => { throw new Error("unexpected fetch"); };
+  try {
+    await import(`${new URL("../extension/dashboard.js", import.meta.url).href}?unsupported-recovery=${Date.now()}`);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.match(elements.get("status").textContent, /Cannot recover active task:.*unsupported: review/);
+    assert.equal(elements.get("status").dataset.error, "true");
+    assert.equal(providerActions, 0);
+    assert.equal(storage.taskState.intent, "review");
+  } finally { Object.assign(globalThis, previous); }
+});
+
 function makeDashboardElements() {
   const ids = [
     "open-chatgpt", "open-codex", "open-github", "capture", "submit", "finalize-initial", "finalize-update",
-    "repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch",
+    "repository", "issue", "pull-request", "handoff-mode", "work-intent", "service-url", "storage-repository", "storage-branch",
     "prompt-evidence", "report-evidence", "prompt-recovery", "report-recovery", "change-description-publication", "change-comment-publication", "committed-file-publication", "committed-file-repository", "committed-file-branch", "committed-file-path-template", "summary", "validation", "prompt", "status",
   ];
-  return new Map(ids.map((id) => [id, {
+  const elements = new Map(ids.map((id) => [id, {
     value: "",
     textContent: "",
     dataset: {},
@@ -262,4 +291,6 @@ function makeDashboardElements() {
     listeners: new Map(),
     addEventListener(type, listener) { this.listeners.set(type, listener); },
   }]));
+  elements.get("work-intent").value = "implement";
+  return elements;
 }
