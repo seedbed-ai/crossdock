@@ -21,7 +21,7 @@ import {
 } from "./service-client.js";
 
 const $ = (id) => document.getElementById(id);
-const fields = ["repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch", "prompt-evidence", "report-evidence", "prompt-recovery", "report-recovery", "change-description-publication", "change-comment-publication", "summary", "validation", "prompt"];
+const fields = ["repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch", "prompt-evidence", "report-evidence", "prompt-recovery", "report-recovery", "change-description-publication", "change-comment-publication", "committed-file-publication", "committed-file-repository", "committed-file-branch", "committed-file-path-template", "summary", "validation", "prompt"];
 const POLL_MS = 5000;
 let taskState = null;
 let monitoring = false;
@@ -101,6 +101,7 @@ $("finalize-update").addEventListener("click", run(async () => {
 for (const id of fields.filter((id) => id !== "prompt")) {
   $(id).addEventListener("change", () => void persist());
 }
+$("committed-file-publication").addEventListener("change", updateCommittedFileControls);
 
 async function monitorTask() {
   if (monitoring || !taskState) return;
@@ -370,11 +371,23 @@ function readRecoveryPolicy() {
 }
 
 function readPublicationPolicy() {
+  const presentation = $("committed-file-publication").value;
   return normalizeBrowserPublicationPolicy({
     change_description: $("change-description-publication").value,
     change_comment: $("change-comment-publication").value,
-    committed_file: null,
+    committed_file: presentation === "none" ? null : {
+      presentation,
+      adapter: "github",
+      repository: $("committed-file-repository").value.trim(),
+      branch: $("committed-file-branch").value.trim(),
+      path_template: $("committed-file-path-template").value.trim(),
+    },
   });
+}
+
+function updateCommittedFileControls() {
+  const disabled = $("committed-file-publication").value === "none";
+  for (const id of ["committed-file-repository", "committed-file-branch", "committed-file-path-template"]) $(id).disabled = disabled;
 }
 
 function requireServiceUrl() {
@@ -481,6 +494,8 @@ async function restore() {
   if (!$("report-recovery").value) $("report-recovery").value = DEFAULT_REPORT_RECOVERY_MODE;
   if (!$("change-description-publication").value) $("change-description-publication").value = DEFAULT_PUBLICATION_POLICY.change_description;
   if (!$("change-comment-publication").value) $("change-comment-publication").value = DEFAULT_PUBLICATION_POLICY.change_comment;
+  if (!$("committed-file-publication").value) $("committed-file-publication").value = "none";
+  updateCommittedFileControls();
 
   const serviceMigration = migrateActiveTaskServiceUrl(stored.taskState ?? null);
   const publicationMigration = migrateActiveTaskPublication(serviceMigration.taskState);

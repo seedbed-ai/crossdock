@@ -83,7 +83,8 @@ Set:
 - the prompt recovery policy;
 - the report recovery policy;
 - the initial-PR provenance publication choice; and
-- the update provenance publication choice.
+- the update provenance publication choice; and
+- optionally, committed-file provenance with an explicit presentation, repository, branch, and path template containing `{task_id}`.
 
 Prompt and report evidence are independent. Current options are:
 
@@ -184,13 +185,19 @@ For a new disposable task, choose **Publish no Crossdock provenance** for the ap
 
 As an optional frozen-policy recovery check, start a task with publication set one way, then change the visible selector before finalization. The active task must use the policy captured at submission rather than the newly edited preference.
 
-The shared configuration schema also reserves `summary` and committed-file publication modes, but the current browser/service path intentionally does not expose or execute those modes yet. Do not treat them as live-test requirements for this adapter.
+PR-body/comment `summary` remains reserved but unimplemented; do not treat it as a live-test option.
 
-## 12. Test automatic mode
+## 12. Optional committed-file exercise (Thursday)
+
+For Thursday's disposable run, select **Link** or **Reference** under **Committed-file provenance** and explicitly enter a private or otherwise appropriate disposable GitHub repository, branch, and repository-relative path such as `crossdock/{task_id}.md`. Do not reuse sensitive evidence or assume the target/task-record repository is the destination.
+
+Verify that the file is created at the exact configured repository, branch, and resolved path. Its deterministic link/reference content must contain no prompt or report evidence. Retry or recover the handoff and confirm create-or-identical behavior neither overwrites nor duplicates the file. After submitting another task, change all visible committed-file fields before finalization and confirm the active task still publishes only to its original frozen destination. A missing or partial destination must fail before coding-agent delegation or source mutation.
+
+## 13. Test automatic mode
 
 After both review-mode flows work, repeat with automatic handoff enabled. The durable result should be equivalent; only the approval transition should differ.
 
-## 13. Failure cases worth reporting
+## 14. Failure cases worth reporting
 
 Useful live-test failures include:
 

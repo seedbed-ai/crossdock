@@ -128,7 +128,7 @@ The core and loopback service execute the GitHub destination only after the immu
 
 Committed-file publication never copies prompt/report plaintext, prompt/report hashes, task-record bytes, execution reports, session data, or credentials. Enabling it does not change either evidence mode or grant another evidence-publication permission.
 
-The browser dashboard does not expose committed-file settings yet and its browser policy adapter remains explicitly fail-closed when one is configured. The dashboard does not infer a destination from the target or task-record repository; browser support requires a future explicit UI for presentation, repository, branch, and path template.
+The browser dashboard exposes committed-file publication as an optional control that defaults to disabled. Selecting `link` or `reference` requires the user to enter the GitHub repository, branch, and path template explicitly; the dashboard never derives them from the target repository, task-record storage, current PR, or provider state. The complete normalized policy is frozen into active-task state at submission, so later preference edits and restart recovery cannot redirect an active task. Older active-task publication objects migrate with `committed_file: null` and no inferred destination.
 
 ## Loopback service URL
 

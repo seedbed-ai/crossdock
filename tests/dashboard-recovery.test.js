@@ -23,6 +23,10 @@ test("submission freezes independent memory-only prompt and report recovery", as
   Object.assign(elements.get("report-recovery"), { value: "memory" });
   Object.assign(elements.get("change-description-publication"), { value: "none" });
   Object.assign(elements.get("change-comment-publication"), { value: "none" });
+  Object.assign(elements.get("committed-file-publication"), { value: "reference" });
+  Object.assign(elements.get("committed-file-repository"), { value: "example/provenance" });
+  Object.assign(elements.get("committed-file-branch"), { value: "records" });
+  Object.assign(elements.get("committed-file-path-template"), { value: "crossdock/{task_id}.md" });
 
   globalThis.document = {
     getElementById(id) { return elements.get(id) ?? null; },
@@ -68,6 +72,16 @@ test("submission freezes independent memory-only prompt and report recovery", as
     assert.equal(storage.taskState.prompt, undefined);
     assert.deepEqual(storage.taskState.recovery, { prompt: "memory", report: "memory" });
     assert.equal(storage.taskState.evidence_policy.prompt, "omit");
+    assert.deepEqual(storage.taskState.publication.committed_file, {
+      presentation: "reference", adapter: "github", repository: "example/provenance", branch: "records", path_template: "crossdock/{task_id}.md",
+    });
+    elements.get("committed-file-publication").value = "link";
+    elements.get("committed-file-repository").value = "changed/destination";
+    elements.get("committed-file-branch").value = "changed";
+    elements.get("committed-file-path-template").value = "changed/{task_id}.md";
+    assert.deepEqual(storage.taskState.publication.committed_file, {
+      presentation: "reference", adapter: "github", repository: "example/provenance", branch: "records", path_template: "crossdock/{task_id}.md",
+    });
     assert.equal(storage.taskState.phase, "ready");
   } finally {
     globalThis.document = previous.document;
@@ -139,7 +153,7 @@ function makeDashboardElements() {
   const ids = [
     "open-chatgpt", "open-codex", "open-github", "capture", "submit", "finalize-initial", "finalize-update",
     "repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch",
-    "prompt-evidence", "report-evidence", "prompt-recovery", "report-recovery", "change-description-publication", "change-comment-publication",
+    "prompt-evidence", "report-evidence", "prompt-recovery", "report-recovery", "change-description-publication", "change-comment-publication", "committed-file-publication", "committed-file-repository", "committed-file-branch", "committed-file-path-template",
     "summary", "validation", "prompt", "status",
   ];
   return new Map(ids.map((id) => [id, {
