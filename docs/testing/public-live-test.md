@@ -77,6 +77,7 @@ Set:
 - the disposable target repository;
 - the Crossdock service URL matching the local service port;
 - the private task-record repository and branch;
+- **Implementation — experimental** as the work intent (the only executable intent on this adapter);
 - `Review before handoff` for the first run;
 - the prompt evidence policy;
 - the report evidence policy;
@@ -111,6 +112,8 @@ Publication is another separate choice. The current dashboard supports:
 The publication policy is captured when the task starts. Editing those selectors while a task is already active must not change that task's eventual publication behavior.
 
 The service URL is also captured when the task starts. As an optional recovery test, change the visible dashboard service URL after submission without stopping the original service. The active task must continue using its original frozen endpoint rather than redirecting recovery/handoff to the new preference.
+
+The work intent is likewise captured when the task starts. As a fail-closed check using only your own dashboard, temporarily set the selector's value programmatically to `review` (or another unsupported value) before submission. Crossdock must show an unsupported-intent error without creating a Codex task or, for an update, taking an unnecessary PR snapshot. Restore the selector to `implement` for the live workflow. Changing the visible selector after a successful submission must not alter the active task panel's frozen **Implementation** intent. This check does not implement or test review execution.
 
 ## 6. Run a minimal initial task
 
@@ -211,6 +214,8 @@ Useful live-test failures include:
 - invalid or mismatched loopback service port/URL;
 - task recovery switching to a newly edited service URL instead of its frozen endpoint;
 - task recovery switching to a newly edited publication preference instead of its frozen policy;
+- an unsupported, empty, or unknown work intent creating a provider task or causing update preflight activity;
+- active-task intent changing when the visible work-intent preference changes;
 - memory-only prompt content appearing in persisted dashboard or active-task state;
 - a memory-only task silently widening prompt retention after a selector change or restart;
 - captured memory-only report content appearing in persisted active-task state;

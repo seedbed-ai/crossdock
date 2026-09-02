@@ -23,7 +23,7 @@ Capability status and live compatibility are related but distinct. `crossdock.ag
 
 Replace the placeholder row when the first public report is accepted. Keep rows concise; detailed reproduction/evidence belongs in the linked issue or comment.
 
-For the current Codex browser adapter, `implement` is the only advertised intent and remains **experimental** until authenticated live testing establishes compatibility. Disabled dashboard intents are intentionally not executable and therefore do not receive compatibility credit from implementation-path tests.
+For the current Codex browser adapter, `implement` is the only advertised intent and remains **experimental** until authenticated live testing establishes compatibility. The dashboard validates that intent before provider delegation or an update-task PR snapshot and freezes it in active recovery state. Disabled dashboard intents are presentational hints rather than the safety boundary: manipulated, empty, or unknown values fail closed and do not receive compatibility credit from implementation-path tests.
 
 ## What counts as a verified path
 

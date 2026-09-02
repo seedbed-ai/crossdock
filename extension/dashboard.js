@@ -3,6 +3,7 @@ import {
   migrateActiveTaskPublication,
   normalizeBrowserPublicationPolicy,
 } from "./publication-client.js";
+import { migrateActiveTaskIntent, normalizeBrowserIntent } from "./intent-client.js";
 import {
   DEFAULT_PROMPT_RECOVERY_MODE,
   DEFAULT_REPORT_RECOVERY_MODE,
@@ -21,7 +22,7 @@ import {
 } from "./service-client.js";
 
 const $ = (id) => document.getElementById(id);
-const fields = ["repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch", "prompt-evidence", "report-evidence", "prompt-recovery", "report-recovery", "change-description-publication", "change-comment-publication", "committed-file-publication", "committed-file-repository", "committed-file-branch", "committed-file-path-template", "summary", "validation", "prompt"];
+const fields = ["repository", "issue", "pull-request", "handoff-mode", "work-intent", "service-url", "storage-repository", "storage-branch", "prompt-evidence", "report-evidence", "prompt-recovery", "report-recovery", "change-description-publication", "change-comment-publication", "committed-file-publication", "committed-file-repository", "committed-file-branch", "committed-file-path-template", "summary", "validation", "prompt"];
 const POLL_MS = 5000;
 let taskState = null;
 let monitoring = false;
@@ -45,6 +46,8 @@ $("capture").addEventListener("click", run(async () => {
 
 $("submit").addEventListener("click", run(async () => {
   if (taskState) throw new Error("a coding-agent task is already active");
+  // Validate before repository snapshots, service calls, or provider actions.
+  const intent = normalizeBrowserIntent($("work-intent").value);
   const prompt = $("prompt").value;
   if (!prompt.trim()) throw new Error("capture a prompt first");
 
@@ -64,6 +67,7 @@ $("submit").addEventListener("click", run(async () => {
     task_id: `crossdock-${crypto.randomUUID()}`,
     created_at: new Date().toISOString(),
     prompt,
+    intent,
     mode,
     handoff_mode: $("handoff-mode").value,
     evidence_policy: evidencePolicy,
@@ -500,9 +504,17 @@ async function restore() {
   const serviceMigration = migrateActiveTaskServiceUrl(stored.taskState ?? null);
   const publicationMigration = migrateActiveTaskPublication(serviceMigration.taskState);
   const recoveryMigration = migrateActiveTaskRecovery(publicationMigration.taskState);
-  taskState = recoveryMigration.taskState;
+  let intentMigration;
+  try {
+    intentMigration = migrateActiveTaskIntent(recoveryMigration.taskState);
+  } catch (error) {
+    taskState = recoveryMigration.taskState;
+    setStatus(`Cannot recover active task: ${error.message}`, true);
+    return;
+  }
+  taskState = intentMigration.taskState;
   if (!taskState) return;
-  if (serviceMigration.changed || publicationMigration.changed || recoveryMigration.changed) await saveTaskState();
+  if (serviceMigration.changed || publicationMigration.changed || recoveryMigration.changed || intentMigration.changed) await saveTaskState();
 
   try {
     assertPromptAvailableForRecovery(taskState);
