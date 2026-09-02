@@ -5,9 +5,12 @@ import {
 } from "./publication-client.js";
 import {
   DEFAULT_PROMPT_RECOVERY_MODE,
+  DEFAULT_REPORT_RECOVERY_MODE,
   assertPromptAvailableForRecovery,
+  assertReportAvailableForRecovery,
   migrateActiveTaskRecovery,
   normalizePromptRecoveryMode,
+  normalizeReportRecoveryMode,
   taskStateForLocalPersistence,
 } from "./recovery-client.js";
 import {
@@ -18,7 +21,7 @@ import {
 } from "./service-client.js";
 
 const $ = (id) => document.getElementById(id);
-const fields = ["repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch", "prompt-evidence", "report-evidence", "prompt-recovery", "change-description-publication", "change-comment-publication", "summary", "validation", "prompt"];
+const fields = ["repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch", "prompt-evidence", "report-evidence", "prompt-recovery", "report-recovery", "change-description-publication", "change-comment-publication", "summary", "validation", "prompt"];
 const POLL_MS = 5000;
 let taskState = null;
 let monitoring = false;
@@ -360,7 +363,10 @@ function readEvidencePolicy() {
 }
 
 function readRecoveryPolicy() {
-  return { prompt: normalizePromptRecoveryMode($("prompt-recovery").value) };
+  return {
+    prompt: normalizePromptRecoveryMode($("prompt-recovery").value),
+    report: normalizeReportRecoveryMode($("report-recovery").value),
+  };
 }
 
 function readPublicationPolicy() {
@@ -423,6 +429,7 @@ function parsePrNumber(url, repository) {
 function requireTaskState(mode) {
   if (!taskState?.task_id) throw new Error("no submitted task is active");
   assertPromptAvailableForRecovery(taskState);
+  assertReportAvailableForRecovery(taskState);
   if (mode && taskState.mode !== mode) throw new Error(`active task is ${taskState.mode}, not ${mode}`);
 }
 
@@ -471,6 +478,7 @@ async function restore() {
   }
   if (!$("service-url").value.trim()) $("service-url").value = DEFAULT_SERVICE_URL;
   if (!$("prompt-recovery").value) $("prompt-recovery").value = DEFAULT_PROMPT_RECOVERY_MODE;
+  if (!$("report-recovery").value) $("report-recovery").value = DEFAULT_REPORT_RECOVERY_MODE;
   if (!$("change-description-publication").value) $("change-description-publication").value = DEFAULT_PUBLICATION_POLICY.change_description;
   if (!$("change-comment-publication").value) $("change-comment-publication").value = DEFAULT_PUBLICATION_POLICY.change_comment;
 
@@ -483,6 +491,7 @@ async function restore() {
 
   try {
     assertPromptAvailableForRecovery(taskState);
+    assertReportAvailableForRecovery(taskState);
   } catch (error) {
     setStatus(error.message, true);
     return;

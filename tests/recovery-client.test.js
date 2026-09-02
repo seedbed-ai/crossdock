@@ -23,7 +23,7 @@ test("persist mode retains prompt in local recovery state", () => {
   const original = task();
   const stored = taskStateForLocalPersistence(original);
   assert.equal(stored.prompt, "private prompt");
-  assert.deepEqual(stored.recovery, { prompt: "persist" });
+  assert.deepEqual(stored.recovery, { prompt: "persist", report: "persist" });
   assert.notEqual(stored, original);
 });
 
@@ -32,14 +32,14 @@ test("memory mode removes prompt from local recovery state without mutating live
   const stored = taskStateForLocalPersistence(original);
   assert.equal(stored.prompt, undefined);
   assert.equal(original.prompt, "private prompt");
-  assert.deepEqual(stored.recovery, { prompt: "memory" });
+  assert.deepEqual(stored.recovery, { prompt: "memory", report: "persist" });
 });
 
 test("legacy active tasks migrate to historical prompt persistence", () => {
   const original = { task_id: "legacy", prompt: "prompt", phase: "ready" };
   const migrated = migrateActiveTaskRecovery(original);
   assert.equal(migrated.changed, true);
-  assert.deepEqual(migrated.taskState.recovery, { prompt: DEFAULT_PROMPT_RECOVERY_MODE });
+  assert.deepEqual(migrated.taskState.recovery, { prompt: DEFAULT_PROMPT_RECOVERY_MODE, report: "persist" });
   assert.equal(original.recovery, undefined);
 });
 

@@ -50,7 +50,13 @@
           <option value="memory">Keep prompt in memory only</option>
         </select>
       </label>
-      <p class="wide">Evidence settings control the durable task record. Prompt crash recovery is separate: memory-only prevents the prompt from being written to browser local storage, but a browser/dashboard restart cannot recover full or hash prompt evidence because the original prompt bytes are intentionally gone.</p>
+      <label>Report crash recovery
+        <select id="report-recovery">
+          <option value="persist">Persist captured report locally for recovery</option>
+          <option value="memory">Keep captured report in memory only</option>
+        </select>
+      </label>
+      <p class="wide">Evidence settings control the durable task record. Crash recovery is separate: memory-only prevents that plaintext from being written to browser local storage. After a restart, full or hash evidence cannot be completed if the required original bytes were intentionally discarded. Reports are only affected after capture.</p>
       <label>Initial PR provenance
         <select id="change-description-publication">
           <option value="link">Publish task-record link</option>

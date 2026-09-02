@@ -19,10 +19,10 @@ test("memory-only report is removed only from the persisted clone", () => {
   assert.deepEqual(stored.recovery, { prompt: "persist", report: "memory" });
 });
 
-test("prompt-era active tasks preserve their shape and inherit report persistence semantically", () => {
+test("prompt-era active tasks migrate explicitly to historical report persistence", () => {
   const migrated = migrateActiveTaskRecovery(task({ recovery: { prompt: "memory" } }));
-  assert.equal(migrated.changed, false);
-  assert.deepEqual(migrated.taskState.recovery, { prompt: "memory" });
+  assert.equal(migrated.changed, true);
+  assert.deepEqual(migrated.taskState.recovery, { prompt: "memory", report: DEFAULT_REPORT_RECOVERY_MODE });
   assert.doesNotThrow(() => assertReportAvailableForRecovery(migrated.taskState));
 });
 
