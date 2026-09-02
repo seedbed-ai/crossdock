@@ -31,7 +31,7 @@ The public repository currently contains:
 - public live-test, compatibility, architecture, configuration, security, release-policy, development, and contribution documentation; and
 - GitHub Actions validation for the Node/JavaScript surfaces.
 
-The core and loopback service execute explicit GitHub committed-file provenance destinations with create-or-identical, no-overwrite verification. The browser adapter currently executes `link` and `none` provenance choices only for initial PR descriptions and later update comments; it does not expose committed-file configuration and remains fail-closed for that surface. `summary` also remains unimplemented. The adapter remains fail-closed and experimental until authenticated live compatibility testing establishes current provider behavior.
+The core and loopback service execute explicit GitHub committed-file provenance destinations with create-or-identical, no-overwrite verification. The browser dashboard exposes that optional destination with explicit presentation, repository, branch, and path-template controls alongside independent `link` and `none` choices for initial PR descriptions and later update comments. PR-body/comment `summary` remains unimplemented. The adapter remains fail-closed and experimental until authenticated live compatibility testing establishes current provider behavior.
 
 ## Ways to help right now
 

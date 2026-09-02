@@ -12,6 +12,7 @@ import {
   postServiceJson,
   resolveServiceUrl,
 } from "../extension/service-client.js";
+import { readFile } from "node:fs/promises";
 
 function okResponse(body = { ok: true }) {
   return {
@@ -24,6 +25,14 @@ function okResponse(body = { ok: true }) {
 test("browser service URL accepts explicit port 80 consistently", () => {
   assert.equal(normalizeServiceUrl("http://127.0.0.1:80"), "http://127.0.0.1:80");
   assert.equal(normalizeServiceUrl("http://127.0.0.1:8787/"), "http://127.0.0.1:8787");
+});
+
+test("dashboard defaults committed-file publication to disabled without implicit values", async () => {
+  const html = await readFile(new URL("../extension/dashboard.html", import.meta.url), "utf8");
+  assert.match(html, /<select id="committed-file-publication"><option value="none">Disabled<\/option>/);
+  assert.match(html, /id="committed-file-repository"[^>]*disabled/);
+  assert.match(html, /id="committed-file-branch"[^>]*disabled/);
+  assert.match(html, /id="committed-file-path-template" placeholder="provenance\/\{task_id\}\.md"[^>]*disabled/);
 });
 
 test("browser service URL rejects non-loopback and decorated destinations", () => {
@@ -59,7 +68,7 @@ test("existing active task endpoint is normalized without reading a new preferen
   assert.equal(resolveServiceUrl({ taskState: migrated.taskState, preference: "http://127.0.0.1:9999" }), "http://127.0.0.1:8787");
 });
 
-test("browser publication policy supports only currently executable link and none modes", () => {
+test("browser publication policy supports PR modes and explicit committed-file destinations", () => {
   assert.deepEqual(normalizeBrowserPublicationPolicy({
     change_description: "none",
     change_comment: "link",
@@ -70,7 +79,24 @@ test("browser publication policy supports only currently executable link and non
     committed_file: null,
   });
   assert.throws(() => normalizeBrowserPublicationPolicy({ change_description: "summary", change_comment: "link", committed_file: null }), /link or none/);
-  assert.throws(() => normalizeBrowserPublicationPolicy({ change_description: "link", change_comment: "link", committed_file: { presentation: "reference" } }), /committed-file/);
+  for (const presentation of ["link", "reference"]) {
+    assert.deepEqual(normalizeBrowserPublicationPolicy({
+      change_description: "link", change_comment: "none",
+      committed_file: { presentation, adapter: "github", repository: "example/provenance", branch: "records", path_template: "crossdock/{task_id}.md" },
+    }).committed_file, { presentation, adapter: "github", repository: "example/provenance", branch: "records", path_template: "crossdock/{task_id}.md" });
+  }
+});
+
+test("browser committed-file configuration fails closed", () => {
+  const valid = { presentation: "link", adapter: "github", repository: "example/provenance", branch: "main", path_template: "records/{task_id}.md" };
+  const policy = (committed_file) => ({ change_description: "link", change_comment: "link", committed_file });
+  for (const committed_file of [
+    { ...valid, presentation: "summary" }, { ...valid, adapter: "gitlab" }, { ...valid, repository: "" },
+    { ...valid, branch: "" }, { ...valid, path_template: "" }, { ...valid, path_template: "records/task.md" },
+    { ...valid, path_template: "/records/{task_id}.md" }, { ...valid, path_template: "../{task_id}.md" },
+    { ...valid, path_template: "records\\{task_id}.md" }, { ...valid, path_template: "records//{task_id}.md" },
+    { ...valid, path_template: "records/{other}/{task_id}.md" },
+  ]) assert.throws(() => normalizeBrowserPublicationPolicy(policy(committed_file)));
 });
 
 test("legacy active tasks migrate to historical link publication behavior", () => {
@@ -87,6 +113,12 @@ test("existing active task publication is frozen and validated", () => {
   assert.equal(migrated.changed, false);
   assert.deepEqual(migrated.taskState.publication, publication);
   assert.throws(() => migrateActiveTaskPublication({ task_id: "task-1", publication: { ...publication, change_comment: "summary" } }), /link or none/);
+});
+
+test("older publication objects migrate without inferring committed-file destination", () => {
+  const migrated = migrateActiveTaskPublication({ task_id: "task-1", repository: "target/repo", storage: { repository: "records/repo" }, publication: { change_description: "link", change_comment: "none" } });
+  assert.equal(migrated.changed, true);
+  assert.equal(migrated.taskState.publication.committed_file, null);
 });
 
 test("service client uses frozen task endpoint after preference changes", async () => {
@@ -122,6 +154,10 @@ test("dashboard restoration keeps recovered update requests on frozen endpoint a
       "report-recovery": "persist",
       "change-description-publication": "none",
       "change-comment-publication": "none",
+      "committed-file-publication": "reference",
+      "committed-file-repository": "visible/changed",
+      "committed-file-branch": "changed",
+      "committed-file-path-template": "changed/{task_id}.md",
       summary: "Update summary",
       validation: "tests passed",
       prompt: "Update the branch",
@@ -134,7 +170,7 @@ test("dashboard restoration keeps recovered update requests on frozen endpoint a
       handoff_mode: "review",
       evidence_policy: { prompt: "full", report: "full" },
       recovery: { prompt: "persist" },
-      publication: { change_description: "link", change_comment: "link", committed_file: null },
+      publication: { change_description: "link", change_comment: "link", committed_file: { presentation: "link", adapter: "github", repository: "frozen/provenance", branch: "records", path_template: "tasks/{task_id}.md" } },
       repository: "example/repo",
       service_url: "http://127.0.0.1:8787",
       storage: { repository: "example/records", branch: "main" },
@@ -186,6 +222,10 @@ test("dashboard restoration keeps recovered update requests on frozen endpoint a
 
     elements.get("service-url").value = "http://127.0.0.1:9999";
     elements.get("change-comment-publication").value = "none";
+    elements.get("committed-file-publication").value = "reference";
+    elements.get("committed-file-repository").value = "another/destination";
+    elements.get("committed-file-branch").value = "other";
+    elements.get("committed-file-path-template").value = "other/{task_id}.md";
     const finalize = elements.get("finalize-update").listeners.get("click");
     assert.equal(typeof finalize, "function");
     await finalize();
@@ -198,7 +238,7 @@ test("dashboard restoration keeps recovered update requests on frozen endpoint a
     assert.deepEqual(JSON.parse(handoff.init.body).publication, {
       change_description: "link",
       change_comment: "link",
-      committed_file: null,
+      committed_file: { presentation: "link", adapter: "github", repository: "frozen/provenance", branch: "records", path_template: "tasks/{task_id}.md" },
     });
     assert.equal(storage.taskState, undefined);
   } finally {
@@ -212,7 +252,7 @@ function makeDashboardElements() {
   const ids = [
     "open-chatgpt", "open-codex", "open-github", "capture", "submit", "finalize-initial", "finalize-update",
     "repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch",
-    "prompt-evidence", "report-evidence", "prompt-recovery", "report-recovery", "change-description-publication", "change-comment-publication", "summary", "validation", "prompt", "status",
+    "prompt-evidence", "report-evidence", "prompt-recovery", "report-recovery", "change-description-publication", "change-comment-publication", "committed-file-publication", "committed-file-repository", "committed-file-branch", "committed-file-path-template", "summary", "validation", "prompt", "status",
   ];
   return new Map(ids.map((id) => [id, {
     value: "",

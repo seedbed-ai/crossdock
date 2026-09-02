@@ -19,6 +19,7 @@ test("dashboard keeps form controls programmatically labeled", () => {
     "repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch",
     "prompt-evidence", "report-evidence", "prompt-recovery", "report-recovery", "change-description-publication",
     "change-comment-publication", "summary", "validation", "prompt",
+    "committed-file-publication", "committed-file-repository", "committed-file-branch", "committed-file-path-template",
   ]) {
     assert.match(html, new RegExp(`<label[^>]*>[\\s\\S]*?(?:<input|<select|<textarea) id="${id}"`), `${id} should remain inside a label`);
   }

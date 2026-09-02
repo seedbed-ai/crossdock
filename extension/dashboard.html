@@ -61,7 +61,13 @@
       <label>Update provenance
         <select id="change-comment-publication"><option value="link">Publish task-record comment</option><option value="none">Publish no Crossdock provenance</option></select>
       </label>
-      <p class="wide">Publication is separate from task-record storage. Choosing no PR-visible provenance does not disable the configured durable task record. These choices are frozen when a task starts so recovery cannot silently change publication behavior.</p>
+      <label>Committed-file provenance
+        <select id="committed-file-publication"><option value="none">Disabled</option><option value="link">Link</option><option value="reference">Reference</option></select>
+      </label>
+      <label>Provenance file repository <input id="committed-file-repository" placeholder="owner/repo" autocomplete="off" disabled></label>
+      <label>Provenance file branch <input id="committed-file-branch" autocomplete="off" disabled></label>
+      <label class="wide">Provenance file path template <input id="committed-file-path-template" placeholder="provenance/{task_id}.md" autocomplete="off" disabled></label>
+      <p class="wide">Committed-file provenance is optional. Enabling it requires an explicit repository, branch, and path template containing <code>{task_id}</code>; no destination is inferred. Publication is separate from task-record storage. These choices are frozen when a task starts.</p>
       <label class="wide">PR / update summary <textarea id="summary" rows="3" placeholder="What changed and why?"></textarea></label>
       <label class="wide">Validation <textarea id="validation" rows="3" placeholder="One result per line"></textarea></label>
     </section>
