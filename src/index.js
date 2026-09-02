@@ -1,6 +1,6 @@
 export { AGENT_CAPABILITIES_SCHEMA, AGENT_FEATURES, CAPABILITY_STATUSES, WORK_ITEM_INTENTS, intentCapabilityStatus, requireIntentSupport, supportsAgentFeature, supportsIntent, validateAgentCapabilities } from "./agent-capabilities.js";
 export { CODEX_BROWSER_CAPABILITIES } from "./adapters/codex/browser-capabilities.js";
-export { COMMITTED_FILE_PRESENTATIONS, CONFIG_SCHEMA, CONFIG_SCOPES, DEFAULT_CONFIG, HANDOFF_MODES, PUBLICATION_PRESENTATIONS, RECOVERY_PROMPT_MODES, effectiveConfigSummary, resolveConfig, validateConfig, validatePublicationPolicy } from "./config.js";
+export { COMMITTED_FILE_PRESENTATIONS, CONFIG_SCHEMA, CONFIG_SCOPES, DEFAULT_CONFIG, HANDOFF_MODES, PUBLICATION_PRESENTATIONS, RECOVERY_CONTENT_MODES, RECOVERY_PROMPT_MODES, RECOVERY_REPORT_MODES, effectiveConfigSummary, resolveConfig, validateConfig, validatePublicationPolicy } from "./config.js";
 export { GitHubClient } from "./github-client.js";
 export { buildPrBody, buildUpdateComment, persistTaskRecord, publishExistingInitialHandoff, publishInitialHandoff, publishUpdateHandoff } from "./handoff.js";
 export { createHandoffServer } from "./http-server.js";
