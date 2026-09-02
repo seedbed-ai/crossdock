@@ -118,6 +118,7 @@ test("dashboard restoration keeps recovered update requests on frozen endpoint a
       "storage-branch": "main",
       "prompt-evidence": "full",
       "report-evidence": "full",
+      "prompt-recovery": "persist",
       "change-description-publication": "none",
       "change-comment-publication": "none",
       summary: "Update summary",
@@ -131,6 +132,7 @@ test("dashboard restoration keeps recovered update requests on frozen endpoint a
       mode: "update",
       handoff_mode: "review",
       evidence_policy: { prompt: "full", report: "full" },
+      recovery: { prompt: "persist" },
       publication: { change_description: "link", change_comment: "link", committed_file: null },
       repository: "example/repo",
       service_url: "http://127.0.0.1:8787",
@@ -179,7 +181,6 @@ test("dashboard restoration keeps recovered update requests on frozen endpoint a
     await import(`${new URL("../extension/dashboard.js", import.meta.url).href}?recovery-test=${Date.now()}`);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // Preferences change after restore. The active task must retain its frozen values.
     elements.get("service-url").value = "http://127.0.0.1:9999";
     elements.get("change-comment-publication").value = "none";
     const finalize = elements.get("finalize-update").listeners.get("click");
@@ -208,7 +209,7 @@ function makeDashboardElements() {
   const ids = [
     "open-chatgpt", "open-codex", "open-github", "capture", "submit", "finalize-initial", "finalize-update",
     "repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch",
-    "prompt-evidence", "report-evidence", "change-description-publication", "change-comment-publication", "summary", "validation", "prompt", "status",
+    "prompt-evidence", "report-evidence", "prompt-recovery", "change-description-publication", "change-comment-publication", "summary", "validation", "prompt", "status",
   ];
   return new Map(ids.map((id) => [id, {
     value: "",

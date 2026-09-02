@@ -80,6 +80,7 @@ Set:
 - `Review before handoff` for the first run;
 - the prompt evidence policy;
 - the report evidence policy;
+- the prompt recovery policy;
 - the initial-PR provenance publication choice; and
 - the update provenance publication choice.
 
@@ -91,7 +92,14 @@ Prompt and report evidence are independent. Current options are:
 
 The effective evidence policy applies to the task being submitted and must not silently broaden during handoff.
 
-Publication is a separate choice. The current dashboard supports:
+Prompt recovery is a separate local-lifecycle choice:
+
+- **Persist for restart recovery** — Crossdock may persist prompt plaintext in browser-local active-task state until the task completes so a dashboard/browser restart can continue the task; or
+- **Memory only** — Crossdock may use the prompt while the live dashboard remains open but must not write the prompt into persisted dashboard or active-task state.
+
+Memory-only recovery intentionally trades restart recovery for lower local retention. If the dashboard/browser restarts and durable prompt evidence is `full` or `hash`, Crossdock must fail clearly because the original prompt bytes are no longer available. With durable prompt evidence `omit`, recovery may continue without prompt content. Changing the visible recovery selector after submission must not widen the already-started task's frozen recovery policy.
+
+Publication is another separate choice. The current dashboard supports:
 
 - **Publish task-record link/comment** — retain the historical Crossdock link in the PR body or update comment; and
 - **Publish no Crossdock provenance** — keep the durable task record but do not add Crossdock provenance to that PR surface.
@@ -104,7 +112,7 @@ The service URL is also captured when the task starts. As an optional recovery t
 
 Use a deliberately small, reversible change in the disposable target repository, such as adding one harmless text file.
 
-For the baseline run, leave **Initial PR provenance** set to publish the task-record link.
+For the baseline run, leave **Initial PR provenance** set to publish the task-record link and **Prompt recovery** set to persist for restart recovery.
 
 Capture the intended prompt with Crossdock and submit it to the coding agent. When the task becomes ready, review it before choosing **Finalize new PR**.
 
@@ -138,7 +146,21 @@ Crossdock should:
 
 It must not rewrite the original PR body merely to append later provenance.
 
-## 9. Exercise no-PR-visible provenance
+## 9. Exercise memory-only prompt recovery
+
+Use a disposable task with **Prompt recovery** set to **Memory only**. Capture a recognizable non-secret prompt and submit the task without reloading the dashboard.
+
+Verify that normal in-page execution can proceed, then inspect only your own local test state as appropriate and confirm:
+
+1. the persisted dashboard form does not contain the captured prompt;
+2. persisted active-task state does not contain the captured prompt;
+3. changing the visible recovery selector after submission does not cause the active task to begin persisting the prompt;
+4. successful task completion clears any persisted captured-prompt form value regardless of recovery mode; and
+5. durable task-record evidence still independently follows the selected `full`, `hash`, or `omit` policy.
+
+For restart behavior, use a second disposable memory-only task. If prompt evidence is `full` or `hash`, restart/reload after submission and verify Crossdock reports that prompt content is unavailable instead of silently recapturing or reconstructing it. If prompt evidence is `omit`, verify recovery can continue without prompt content when the rest of the provider state remains recoverable.
+
+## 10. Exercise no-PR-visible provenance
 
 After the baseline initial/update flow succeeds, exercise publication independently from durable storage.
 
@@ -155,11 +177,11 @@ As an optional frozen-policy recovery check, start a task with publication set o
 
 The shared configuration schema also reserves `summary` and committed-file publication modes, but the current browser/service path intentionally does not expose or execute those modes yet. Do not treat them as live-test requirements for this adapter.
 
-## 10. Test automatic mode
+## 11. Test automatic mode
 
 After both review-mode flows work, repeat with automatic handoff enabled. The durable result should be equivalent; only the approval transition should differ.
 
-## 11. Failure cases worth reporting
+## 12. Failure cases worth reporting
 
 Useful live-test failures include:
 
@@ -173,6 +195,8 @@ Useful live-test failures include:
 - invalid or mismatched loopback service port/URL;
 - task recovery switching to a newly edited service URL instead of its frozen endpoint;
 - task recovery switching to a newly edited publication preference instead of its frozen policy;
+- memory-only prompt content appearing in persisted dashboard or active-task state;
+- a memory-only task silently widening prompt retention after a selector change or restart;
 - a task record missing because PR-visible publication was disabled;
 - a PR body/comment containing Crossdock provenance despite a `none` publication choice;
 - loopback service failure;
