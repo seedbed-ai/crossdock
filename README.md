@@ -51,7 +51,7 @@ Small, focused contributions are welcome. A reproducible compatibility failure, 
 
 A completed Crossdock task creates an immutable task record with stable handoff metadata. Prompt and execution-report evidence are independently configurable: current records can retain full canonical evidence, retain only an integrity hash, or omit either evidence class entirely.
 
-Automation is a choice, not an assumption. The current dashboard supports both automatic handoff and review-before-handoff, explicit task-record storage, configurable prompt recovery persistence, and independent `link`/`none` publication on the currently implemented PR surfaces. User-facing configuration is intended to expand rather than force one privacy, retention, storage, publication, or workflow preference on every user.
+Automation is a choice, not an assumption. The current dashboard supports both automatic handoff and review-before-handoff, explicit task-record storage, independent prompt/report crash-recovery persistence, and independent `link`/`none` publication on the currently implemented PR surfaces. User-facing configuration is intended to expand rather than force one privacy, retention, storage, publication, or workflow preference on every user.
 
 Crossdock independently verifies durable handoff state before reporting completion and fails closed when repository, PR, branch, provider control, or recovery identity is ambiguous.
 
@@ -79,7 +79,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for contribution expectations and [`doc
 
 ## Security and privacy
 
-Prompts and execution reports may contain private development context. Crossdock source is public; user task records are not therefore public. Users can choose how much prompt/report evidence to retain, and transient recovery controls are being implemented independently from durable evidence choices. See [`SECURITY.md`](SECURITY.md), [`docs/architecture/security-boundaries.md`](docs/architecture/security-boundaries.md), and [`docs/reference/task-record-schema.md`](docs/reference/task-record-schema.md).
+Prompts and execution reports may contain private development context. Crossdock source is public; user task records are not therefore public. Users can choose how much prompt/report evidence to retain, and the browser dashboard independently controls whether prompt/report plaintext may be persisted for crash recovery. Broader transient-data lifetime, history, diagnostics, encryption, and deletion controls remain tracked in [#19](https://github.com/seedbed-ai/crossdock/issues/19). See [`SECURITY.md`](SECURITY.md), [`docs/architecture/security-boundaries.md`](docs/architecture/security-boundaries.md), and [`docs/reference/task-record-schema.md`](docs/reference/task-record-schema.md).
 
 Never post access tokens, cookies, credentials, private prompts/reports, private repository contents, or other sensitive material in a public issue, discussion, screenshot, fixture, commit, or pull request.
 
