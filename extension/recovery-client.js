@@ -12,11 +12,10 @@ export function taskStateForLocalPersistence(taskState) {
   if (taskState == null) return null;
   if (!taskState || typeof taskState !== "object" || Array.isArray(taskState)) throw new TypeError("active task state must be an object");
   const prompt = normalizePromptRecoveryMode(taskState.recovery?.prompt ?? DEFAULT_PROMPT_RECOVERY_MODE);
-  const hasReportPolicy = Object.hasOwn(taskState.recovery ?? {}, "report");
   const report = normalizeReportRecoveryMode(taskState.recovery?.report ?? DEFAULT_REPORT_RECOVERY_MODE);
   const persisted = structuredClone(taskState);
   persisted.recovery = { ...(persisted.recovery ?? {}), prompt };
-  if (hasReportPolicy) persisted.recovery.report = report;
+  persisted.recovery.report = report;
   if (prompt === "memory") delete persisted.prompt;
   if (report === "memory") delete persisted.final_report;
   return persisted;
@@ -25,10 +24,14 @@ export function taskStateForLocalPersistence(taskState) {
 export function migrateActiveTaskRecovery(taskState) {
   if (taskState == null) return { taskState: null, changed: false };
   if (!taskState || typeof taskState !== "object" || Array.isArray(taskState)) throw new TypeError("active task state must be an object");
-  if (!Object.hasOwn(taskState, "recovery")) return { taskState: { ...taskState, recovery: { prompt: DEFAULT_PROMPT_RECOVERY_MODE } }, changed: true };
-  const prompt = normalizePromptRecoveryMode(taskState.recovery?.prompt);
-  if (Object.hasOwn(taskState.recovery, "report")) normalizeReportRecoveryMode(taskState.recovery.report);
-  return { taskState: { ...taskState, recovery: { ...taskState.recovery, prompt } }, changed: false };
+  const recovery = taskState.recovery;
+  if (!Object.hasOwn(taskState, "recovery")) {
+    return { taskState: { ...taskState, recovery: { prompt: DEFAULT_PROMPT_RECOVERY_MODE, report: DEFAULT_REPORT_RECOVERY_MODE } }, changed: true };
+  }
+  const prompt = normalizePromptRecoveryMode(recovery?.prompt);
+  const hasReport = Object.hasOwn(recovery, "report");
+  const report = normalizeReportRecoveryMode(recovery?.report ?? DEFAULT_REPORT_RECOVERY_MODE);
+  return { taskState: { ...taskState, recovery: { ...recovery, prompt, report } }, changed: !hasReport };
 }
 
 export function assertPromptAvailableForRecovery(taskState) {

@@ -81,6 +81,7 @@ Set:
 - the prompt evidence policy;
 - the report evidence policy;
 - the prompt recovery policy;
+- the report recovery policy;
 - the initial-PR provenance publication choice; and
 - the update provenance publication choice.
 
@@ -98,6 +99,8 @@ Prompt recovery is a separate local-lifecycle choice:
 - **Memory only** — Crossdock may use the prompt while the live dashboard remains open but must not write the prompt into persisted dashboard or active-task state.
 
 Memory-only recovery intentionally trades restart recovery for lower local retention. If the dashboard/browser restarts and durable prompt evidence is `full` or `hash`, Crossdock must fail clearly because the original prompt bytes are no longer available. With durable prompt evidence `omit`, recovery may continue without prompt content. Changing the visible recovery selector after submission must not widen the already-started task's frozen recovery policy.
+
+Report recovery is independent and uses the same **Persist for restart recovery** and **Memory only** choices. Memory-only applies once the provider report is captured: the live dashboard may finalize with those bytes, but browser-local active-task state must not contain them. A restart before capture remains recoverable. A restart after capture must fail clearly for report evidence `full` or `hash`, while report evidence `omit` may continue without report content.
 
 Publication is another separate choice. The current dashboard supports:
 
@@ -160,7 +163,13 @@ Verify that normal in-page execution can proceed, then inspect only your own loc
 
 For restart behavior, use a second disposable memory-only task. If prompt evidence is `full` or `hash`, restart/reload after submission and verify Crossdock reports that prompt content is unavailable instead of silently recapturing or reconstructing it. If prompt evidence is `omit`, verify recovery can continue without prompt content when the rest of the provider state remains recoverable.
 
-## 10. Exercise no-PR-visible provenance
+## 10. Exercise memory-only report recovery (Thursday)
+
+On Thursday's disposable test run, select **Report crash recovery: Memory only** independently of prompt recovery. First restart the dashboard while the provider task is still running, before report capture, and verify that monitoring can resume. Then complete a separate task without restarting and verify that normal in-page finalization succeeds while persisted active-task snapshots contain no `final_report`. Change the visible report-recovery selector after submission and verify that the task remains frozen to memory-only.
+
+Where provider timing makes the boundary practical to exercise safely, use separate disposable post-capture cases: with durable report evidence `full` and `hash`, restart after capture and verify a clear unavailable-original-bytes failure; with report evidence `omit`, verify recovery continues without report content. Do not trigger provider actions again, recapture a report, manually reconstruct it, or accept an evidence downgrade to rescue these cases.
+
+## 11. Exercise no-PR-visible provenance
 
 After the baseline initial/update flow succeeds, exercise publication independently from durable storage.
 
@@ -177,11 +186,11 @@ As an optional frozen-policy recovery check, start a task with publication set o
 
 The shared configuration schema also reserves `summary` and committed-file publication modes, but the current browser/service path intentionally does not expose or execute those modes yet. Do not treat them as live-test requirements for this adapter.
 
-## 11. Test automatic mode
+## 12. Test automatic mode
 
 After both review-mode flows work, repeat with automatic handoff enabled. The durable result should be equivalent; only the approval transition should differ.
 
-## 12. Failure cases worth reporting
+## 13. Failure cases worth reporting
 
 Useful live-test failures include:
 
@@ -197,6 +206,8 @@ Useful live-test failures include:
 - task recovery switching to a newly edited publication preference instead of its frozen policy;
 - memory-only prompt content appearing in persisted dashboard or active-task state;
 - a memory-only task silently widening prompt retention after a selector change or restart;
+- captured memory-only report content appearing in persisted active-task state;
+- post-capture restart silently recapturing a report, widening report persistence, or downgrading durable evidence;
 - a task record missing because PR-visible publication was disabled;
 - a PR body/comment containing Crossdock provenance despite a `none` publication choice;
 - loopback service failure;

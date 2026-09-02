@@ -22,7 +22,7 @@ The public repository currently contains:
 - a task-record storage adapter boundary with a GitHub-backed adapter;
 - independently configurable prompt/report evidence retention (`full`, `hash`, or `omit`);
 - independently configurable PR-body/update-comment provenance presentation (`link` or `none`) while durable task-record storage remains required by the current handoff path;
-- configurable prompt crash-recovery persistence (`persist` or `memory`) plus provider-report recovery state semantics and shared report-recovery configuration;
+- independently configurable prompt and provider-report crash-recovery persistence (`persist` or `memory`) in the browser dashboard;
 - idempotent immutable-record and update-comment retry handling;
 - a shared configuration resolver with explicit scope precedence;
 - a configurable loopback HTTP handoff service restricted to numeric loopback;
@@ -31,7 +31,7 @@ The public repository currently contains:
 - public live-test, compatibility, architecture, configuration, security, release-policy, development, and contribution documentation; and
 - GitHub Actions validation for the Node/JavaScript surfaces.
 
-The browser adapter currently executes `link` and `none` provenance choices for initial PR descriptions and later update comments. `summary` and committed-file publication remain intentionally unimplemented until their safety/idempotency semantics are complete. Report-recovery browser UI/state wiring is tracked in [#54](https://github.com/seedbed-ai/crossdock/issues/54). The adapter remains fail-closed and experimental until authenticated live compatibility testing establishes current provider behavior.
+The browser adapter currently executes `link` and `none` provenance choices for initial PR descriptions and later update comments. `summary` and committed-file publication remain intentionally unimplemented until their safety/idempotency semantics are complete. The adapter remains fail-closed and experimental until authenticated live compatibility testing establishes current provider behavior.
 
 ## Ways to help right now
 

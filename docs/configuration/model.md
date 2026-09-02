@@ -83,7 +83,7 @@ For reports, the bytes only become recovery-critical after the provider report h
 
 Changing a visible recovery preference after a task starts must not alter that task's frozen recovery policy. Crossdock never silently turns `memory` into `persist` merely to make recovery succeed.
 
-The shared configuration contract now carries both recovery choices. The current browser UI still exposes prompt recovery only; report-recovery UI/state wiring is the next execution slice. Encrypted/OS-secure recovery storage, retention windows, completed-task history, diagnostics, expiration, and deletion remain separate lifecycle work rather than being inferred from these fields.
+The browser dashboard exposes both choices and freezes them into active-task state at submission. It removes a captured memory-only report from every persisted active-task snapshot while retaining the live copy long enough for ordinary in-page finalization. Legacy and prompt-era active tasks are migrated explicitly to `recovery.report: persist`. Encrypted/OS-secure recovery storage, retention windows, completed-task history, diagnostics, expiration, and deletion remain separate lifecycle work rather than being inferred from these fields.
 
 ## Publication and durable storage are separate
 

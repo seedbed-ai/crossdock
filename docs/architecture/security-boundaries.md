@@ -14,11 +14,11 @@ Browser integrations may act inside sessions the user already authenticated, but
 
 Durable task-record evidence and transient browser recovery state are separate data boundaries.
 
-The current browser client can persist active-task state in `chrome.storage.local` to survive dashboard/browser restarts. Prompt plaintext persistence is explicit: `recovery.prompt: persist` allows the prompt in local recovery state, while `recovery.prompt: memory` removes prompt plaintext from both persisted active-task state and persisted dashboard-form state.
+The current browser client can persist active-task state in `chrome.storage.local` to survive dashboard/browser restarts. Prompt plaintext persistence is explicit: `recovery.prompt: persist` allows the prompt in local recovery state, while `recovery.prompt: memory` removes prompt plaintext from both persisted active-task state and persisted dashboard-form state. Report plaintext has an independent boundary: `recovery.report: persist` allows a captured provider report in persisted active-task state, while `recovery.report: memory` keeps it only in live JavaScript state and removes `final_report` from local recovery snapshots.
 
-Memory-only recovery is deliberately lossy across restart. Crossdock must not reconstruct, recapture, or silently persist a missing prompt merely to complete `full` or `hash` durable evidence. If the original prompt bytes are gone and the selected durable evidence still requires them, recovery fails clearly. Durable prompt `omit` may recover without the prompt because no prompt plaintext or digest is required in the final record.
+Memory-only recovery is deliberately lossy across restart. Crossdock must not reconstruct, recapture, silently persist, or downgrade evidence for missing prompt or report bytes merely to complete `full` or `hash` durable evidence. If the original bytes are gone and the corresponding durable evidence still requires them, recovery fails clearly. Durable `omit` may recover without those bytes because no plaintext or digest is required in the final record. Before provider-report capture, restart remains recoverable in either report recovery mode; after capture, a memory-only report is intentionally unavailable following restart.
 
-This setting does not encrypt browser memory and does not yet control report recovery state, history, diagnostics, expiration, or secure OS-backed storage. Those remain separate lifecycle/security boundaries.
+Neither setting encrypts browser memory or controls history, diagnostics, expiration, deletion, or secure OS-backed storage. Those remain separate lifecycle/security boundaries. Both policies are frozen at task submission, so editing a visible selector cannot widen persistence for an active task.
 
 ## GitHub credentials
 
