@@ -13,6 +13,18 @@
       <output id="status" role="status" aria-live="polite">Ready.</output>
     </header>
 
+    <section class="task-state" aria-labelledby="active-task-heading">
+      <h2 id="active-task-heading">Active task</h2>
+      <p id="active-task-empty">No active task.</p>
+      <dl id="active-task-details" hidden>
+        <div><dt>Mode</dt><dd id="active-task-mode"></dd></div>
+        <div><dt>Phase</dt><dd id="active-task-phase"></dd></div>
+        <div><dt>Repository</dt><dd id="active-task-repository"></dd></div>
+        <div><dt>Pull request</dt><dd id="active-task-pull-request"></dd></div>
+        <div><dt>Handoff</dt><dd id="active-task-handoff-mode"></dd></div>
+      </dl>
+    </section>
+
     <nav class="surfaces" aria-label="Connected work surfaces">
       <button id="open-chatgpt">ChatGPT</button>
       <button id="open-codex">Codex</button>
@@ -31,43 +43,23 @@
       <label class="wide">Task-record repository <input id="storage-repository" placeholder="private owner/repo" autocomplete="off"></label>
       <label>Task-record branch <input id="storage-branch" value="main" autocomplete="off"></label>
       <label>Prompt evidence
-        <select id="prompt-evidence">
-          <option value="full">Store full prompt</option>
-          <option value="hash">Store hash only</option>
-          <option value="omit">Store no prompt evidence</option>
-        </select>
+        <select id="prompt-evidence"><option value="full">Store full prompt</option><option value="hash">Store hash only</option><option value="omit">Store no prompt evidence</option></select>
       </label>
       <label>Report evidence
-        <select id="report-evidence">
-          <option value="full">Store full report</option>
-          <option value="hash">Store hash only</option>
-          <option value="omit">Store no report evidence</option>
-        </select>
+        <select id="report-evidence"><option value="full">Store full report</option><option value="hash">Store hash only</option><option value="omit">Store no report evidence</option></select>
       </label>
       <label>Prompt crash recovery
-        <select id="prompt-recovery">
-          <option value="persist">Persist prompt locally for recovery</option>
-          <option value="memory">Keep prompt in memory only</option>
-        </select>
+        <select id="prompt-recovery"><option value="persist">Persist prompt locally for recovery</option><option value="memory">Keep prompt in memory only</option></select>
       </label>
       <label>Report crash recovery
-        <select id="report-recovery">
-          <option value="persist">Persist captured report locally for recovery</option>
-          <option value="memory">Keep captured report in memory only</option>
-        </select>
+        <select id="report-recovery"><option value="persist">Persist captured report locally for recovery</option><option value="memory">Keep captured report in memory only</option></select>
       </label>
       <p class="wide">Evidence settings control the durable task record. Crash recovery is separate: memory-only prevents that plaintext from being written to browser local storage. After a restart, full or hash evidence cannot be completed if the required original bytes were intentionally discarded. Reports are only affected after capture.</p>
       <label>Initial PR provenance
-        <select id="change-description-publication">
-          <option value="link">Publish task-record link</option>
-          <option value="none">Publish no Crossdock provenance</option>
-        </select>
+        <select id="change-description-publication"><option value="link">Publish task-record link</option><option value="none">Publish no Crossdock provenance</option></select>
       </label>
       <label>Update provenance
-        <select id="change-comment-publication">
-          <option value="link">Publish task-record comment</option>
-          <option value="none">Publish no Crossdock provenance</option>
-        </select>
+        <select id="change-comment-publication"><option value="link">Publish task-record comment</option><option value="none">Publish no Crossdock provenance</option></select>
       </label>
       <p class="wide">Publication is separate from task-record storage. Choosing no PR-visible provenance does not disable the configured durable task record. These choices are frozen when a task starts so recovery cannot silently change publication behavior.</p>
       <label class="wide">PR / update summary <textarea id="summary" rows="3" placeholder="What changed and why?"></textarea></label>
@@ -84,5 +76,6 @@
     <label class="prompt">Captured prompt <textarea id="prompt" rows="10" readonly></textarea></label>
   </main>
   <script type="module" src="dashboard.js"></script>
+  <script type="module" src="task-state-view.js"></script>
 </body>
 </html>
