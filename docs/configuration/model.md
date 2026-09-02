@@ -13,8 +13,9 @@ The shared model contains:
 - `evidence_policy.report`: `full`, `hash`, or `omit`;
 - `storage`: `null` or a configured task-record storage destination. The first implemented storage kind is `github` with `repository` and `branch`;
 - `service_url`: the local loopback handoff-service origin used by the browser adapter;
-- `publication`: where task-record provenance is presented outside the durable task-record store; and
-- `recovery.prompt`: whether prompt plaintext may be persisted locally for crash/restart recovery.
+- `publication`: where task-record provenance is presented outside the durable task-record store;
+- `recovery.prompt`: whether prompt plaintext may be persisted locally for crash/restart recovery; and
+- `recovery.report`: whether captured provider-report plaintext may be persisted locally for crash/restart recovery.
 
 The model is intentionally conservative: a setting should not appear as implemented merely because Product intends to support it later. Additional privacy, lifecycle, provider, storage, and UI settings can extend versioned configuration as their behavior becomes real.
 
@@ -55,29 +56,34 @@ The current compatibility defaults are:
     "committed_file": null
   },
   "recovery": {
-    "prompt": "persist"
+    "prompt": "persist",
+    "report": "persist"
   }
 }
 ```
 
-The compatibility defaults preserve Crossdock's historical behavior while making publication and recovery persistence explicit rather than hidden implementation policy. Existing v1 configuration documents and active browser tasks that predate these fields migrate to the historical defaults.
+The compatibility defaults preserve Crossdock's historical behavior while making publication and recovery persistence explicit rather than hidden implementation policy. Existing v1 configuration documents and active browser tasks that predate these fields migrate to the historical defaults. A config written during the prompt-only recovery era therefore gains `recovery.report: persist` rather than silently changing prior report recovery behavior.
 
 These are implementation defaults, not permanent product policy. User-facing clients should display consequential effective choices before durable persistence or external mutation. Future evidence may justify different defaults without removing supported alternatives.
 
 ## Recovery persistence is separate from durable evidence
 
-`evidence_policy.prompt` answers what prompt evidence belongs in the immutable task record. `recovery.prompt` answers whether prompt plaintext may be written into transient browser-local state while an active task is recoverable.
+`evidence_policy.prompt` and `evidence_policy.report` answer what evidence belongs in the immutable task record. `recovery.prompt` and `recovery.report` independently answer whether the corresponding plaintext may be written into transient browser-local state while an active task is recoverable.
 
-The first implemented prompt recovery modes are:
+Both recovery fields use the same modes:
 
-- `persist` — allow active-task prompt plaintext to be stored in `chrome.storage.local` so a dashboard/browser restart can continue a task that still needs the original prompt bytes; and
-- `memory` — keep prompt plaintext only in the live dashboard JavaScript state after capture/submission and remove it from both persisted dashboard-form state and persisted active-task state.
+- `persist` — allow that active-task plaintext to be stored in local recovery state so a dashboard/browser restart can continue a task that still needs the original bytes; and
+- `memory` — keep that plaintext only in the live process after capture and remove it from persisted active-task recovery state.
 
-`memory` is intentionally a privacy/recoverability tradeoff, not an encryption feature. While the dashboard remains alive, Crossdock can complete normally using the in-memory prompt. After a restart, the prompt is intentionally unavailable. If durable prompt evidence is `full` or `hash`, Crossdock fails recovery clearly because it cannot truthfully reconstruct the missing original bytes. If durable prompt evidence is `omit`, recovery may continue without the prompt because the final task record does not require prompt plaintext or a prompt digest.
+Prompt recovery also covers the persisted dashboard form because prompt content exists there before task submission. Memory-only prompt recovery therefore removes prompt plaintext from both the persisted form and active-task state.
 
-Changing the visible recovery preference after a task starts does not alter that task's frozen recovery policy. Crossdock never silently turns `memory` into `persist` merely to make recovery succeed.
+`memory` is intentionally a privacy/recoverability tradeoff, not an encryption feature. While the dashboard remains alive, Crossdock can complete normally using in-memory content. After a restart, intentionally discarded bytes are unavailable. If durable evidence is `full` or `hash`, Crossdock must fail recovery clearly when those original bytes are already required; it must not reconstruct, recapture, or silently widen persistence. If the corresponding durable evidence is `omit`, recovery may continue without those bytes.
 
-This first slice covers prompt plaintext only. Report recovery persistence, encrypted/OS-secure recovery storage, retention windows, completed-task history, diagnostics, expiration, and deletion remain separate lifecycle work rather than being inferred from `recovery.prompt`.
+For reports, the bytes only become recovery-critical after the provider report has actually been captured. A task configured with `recovery.report: memory` can therefore restart normally while it is still waiting for provider completion. After report capture, a restart may make `full`/`hash` report evidence intentionally unrecoverable; report `omit` remains recoverable without report bytes.
+
+Changing a visible recovery preference after a task starts must not alter that task's frozen recovery policy. Crossdock never silently turns `memory` into `persist` merely to make recovery succeed.
+
+The shared configuration contract now carries both recovery choices. The current browser UI still exposes prompt recovery only; report-recovery UI/state wiring is the next execution slice. Encrypted/OS-secure recovery storage, retention windows, completed-task history, diagnostics, expiration, and deletion remain separate lifecycle work rather than being inferred from these fields.
 
 ## Publication and durable storage are separate
 

@@ -8,12 +8,14 @@ export const HANDOFF_MODES = Object.freeze(["review", "automatic"]);
 export const CONFIG_SCOPES = Object.freeze(["global", "provider", "workspace", "repository", "task"]);
 export const PUBLICATION_PRESENTATIONS = Object.freeze(["link", "summary", "none"]);
 export const COMMITTED_FILE_PRESENTATIONS = Object.freeze(["link", "reference"]);
-export const RECOVERY_PROMPT_MODES = Object.freeze(["persist", "memory"]);
+export const RECOVERY_CONTENT_MODES = Object.freeze(["persist", "memory"]);
+export const RECOVERY_PROMPT_MODES = RECOVERY_CONTENT_MODES;
+export const RECOVERY_REPORT_MODES = RECOVERY_CONTENT_MODES;
 
 const CONFIG_FIELDS = new Set(["schema", "handoff_mode", "evidence_policy", "storage", "service_url", "publication", "recovery"]);
 const PUBLICATION_FIELDS = new Set(["change_description", "change_comment", "committed_file"]);
 const COMMITTED_FILE_FIELDS = new Set(["presentation", "adapter", "repository", "branch", "path_template"]);
-const RECOVERY_FIELDS = new Set(["prompt"]);
+const RECOVERY_FIELDS = new Set(["prompt", "report"]);
 
 const DEFAULT_PUBLICATION = {
   change_description: "link",
@@ -21,7 +23,7 @@ const DEFAULT_PUBLICATION = {
   committed_file: null,
 };
 
-const DEFAULT_RECOVERY = { prompt: "persist" };
+const DEFAULT_RECOVERY = { prompt: "persist", report: "persist" };
 
 export const DEFAULT_CONFIG = deepFreeze({
   schema: CONFIG_SCHEMA,
@@ -133,12 +135,15 @@ function normalizeRecovery(value, label, requireAll) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
   assertKnownKeys(value, RECOVERY_FIELDS, label);
   const result = {};
-  if (!Object.hasOwn(value, "prompt")) {
-    if (requireAll) throw new Error(`${label}.prompt is required`);
-    return result;
+  for (const field of ["prompt", "report"]) {
+    if (!Object.hasOwn(value, field)) {
+      if (requireAll && field === "prompt") throw new Error(`${label}.${field} is required`);
+      if (requireAll && field === "report") result.report = DEFAULT_RECOVERY.report;
+      continue;
+    }
+    if (!RECOVERY_CONTENT_MODES.includes(value[field])) throw new Error(`${label}.${field} must be one of: ${RECOVERY_CONTENT_MODES.join(", ")}`);
+    result[field] = value[field];
   }
-  if (!RECOVERY_PROMPT_MODES.includes(value.prompt)) throw new Error(`${label}.prompt must be one of: ${RECOVERY_PROMPT_MODES.join(", ")}`);
-  result.prompt = value.prompt;
   return result;
 }
 
