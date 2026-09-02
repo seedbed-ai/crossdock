@@ -21,15 +21,17 @@ The public repository currently contains:
 - a deterministic task-record and GitHub handoff core;
 - a task-record storage adapter boundary with a GitHub-backed adapter;
 - independently configurable prompt/report evidence retention (`full`, `hash`, or `omit`);
+- independently configurable PR-body/update-comment provenance presentation (`link` or `none`) while durable task-record storage remains required by the current handoff path;
+- configurable prompt crash-recovery persistence (`persist` or `memory`) plus provider-report recovery state semantics and shared report-recovery configuration;
 - idempotent immutable-record and update-comment retry handling;
 - a shared configuration resolver with explicit scope precedence;
 - a configurable loopback HTTP handoff service restricted to numeric loopback;
 - an experimental Manifest V3 browser adapter and responsive dashboard;
-- provider-neutral agent capability modeling and a proposed/experimental v3 task-record path for review and other non-implementation work;
-- public live-test, compatibility, architecture, configuration, security, development, and contribution documentation; and
+- provider-neutral agent capability modeling and an experimental v3 task-record codec for review and other non-implementation work;
+- public live-test, compatibility, architecture, configuration, security, release-policy, development, and contribution documentation; and
 - GitHub Actions validation for the Node/JavaScript surfaces.
 
-The current v2 implementation still presents task-record linkage through the initial PR body and later update comments. Product direction now treats durable storage and GitHub-visible presentation as independent user choices; [issue #44](https://github.com/seedbed-ai/crossdock/issues/44) tracks configurable publication surfaces. The browser adapter remains fail-closed and experimental until authenticated live compatibility testing establishes current provider behavior.
+The browser adapter currently executes `link` and `none` provenance choices for initial PR descriptions and later update comments. `summary` and committed-file publication remain intentionally unimplemented until their safety/idempotency semantics are complete. Report-recovery browser UI/state wiring is tracked in [#54](https://github.com/seedbed-ai/crossdock/issues/54). The adapter remains fail-closed and experimental until authenticated live compatibility testing establishes current provider behavior.
 
 ## Ways to help right now
 
@@ -49,7 +51,7 @@ Small, focused contributions are welcome. A reproducible compatibility failure, 
 
 A completed Crossdock task creates an immutable task record with stable handoff metadata. Prompt and execution-report evidence are independently configurable: current records can retain full canonical evidence, retain only an integrity hash, or omit either evidence class entirely.
 
-Automation is a choice, not an assumption. The current dashboard supports both automatic handoff and review-before-handoff, plus explicit task-record storage. User-facing configuration is intended to expand rather than force one privacy, retention, storage, publication, or workflow preference on every user.
+Automation is a choice, not an assumption. The current dashboard supports both automatic handoff and review-before-handoff, explicit task-record storage, configurable prompt recovery persistence, and independent `link`/`none` publication on the currently implemented PR surfaces. User-facing configuration is intended to expand rather than force one privacy, retention, storage, publication, or workflow preference on every user.
 
 Crossdock independently verifies durable handoff state before reporting completion and fails closed when repository, PR, branch, provider control, or recovery identity is ambiguous.
 
@@ -71,13 +73,13 @@ npm test
 npm run check
 ```
 
-For the experimental authenticated workflow, follow [`docs/testing/public-live-test.md`](docs/testing/public-live-test.md) rather than guessing setup or manually rescuing a failed handoff. Successful environment reports are useful too; compatibility evidence is accumulated in [`docs/testing/compatibility.md`](docs/testing/compatibility.md).
+For the experimental authenticated workflow, follow [`docs/testing/public-live-test.md`](docs/testing/public-live-test.md) rather than guessing setup or manually rescuing a failed handoff. Successful environment reports are useful too; compatibility evidence is accumulated in [`docs/testing/compatibility.md`](docs/testing/compatibility.md). See [`docs/releases.md`](docs/releases.md) for what experimental, verified, and supported mean before 1.0.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for contribution expectations and [`docs/README.md`](docs/README.md) for the full documentation map. GitHub Discussions is a good place for questions, ideas, workflow/design conversation, and testing/compatibility discussion that is not yet a concrete bug or scoped issue.
 
 ## Security and privacy
 
-Prompts and execution reports may contain private development context. Crossdock source is public; user task records are not therefore public. Users can choose how much prompt/report evidence to retain, and broader transient-data controls are under active design. See [`SECURITY.md`](SECURITY.md), [`docs/architecture/security-boundaries.md`](docs/architecture/security-boundaries.md), and [`docs/reference/task-record-schema.md`](docs/reference/task-record-schema.md).
+Prompts and execution reports may contain private development context. Crossdock source is public; user task records are not therefore public. Users can choose how much prompt/report evidence to retain, and transient recovery controls are being implemented independently from durable evidence choices. See [`SECURITY.md`](SECURITY.md), [`docs/architecture/security-boundaries.md`](docs/architecture/security-boundaries.md), and [`docs/reference/task-record-schema.md`](docs/reference/task-record-schema.md).
 
 Never post access tokens, cookies, credentials, private prompts/reports, private repository contents, or other sensitive material in a public issue, discussion, screenshot, fixture, commit, or pull request.
 
