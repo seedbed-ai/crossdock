@@ -9,6 +9,7 @@ Crossdock is in early public development. These documents describe the intended 
 - [`testing/public-live-test.md`](testing/public-live-test.md) — provider-neutral desktop live-test steps for public testers.
 - [`testing/compatibility.md`](testing/compatibility.md) — dated public evidence for tested browser/OS/workflow combinations.
 - [`releases.md`](releases.md) — pre-1.0 versioning, compatibility levels, migration/deprecation rules, and release-note expectations.
+- [`accessibility.md`](accessibility.md) — current dashboard accessibility guardrails and manual acceptance checks.
 
 ## Concepts
 
