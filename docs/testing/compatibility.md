@@ -13,13 +13,17 @@ Use [`public-live-test.md`](public-live-test.md) for the procedure and the repos
 
 A previous verification does not guarantee compatibility with a later provider UI. Always include the Crossdock ref and test date. A verified row is dated evidence; it does not by itself promote an integration from experimental to supported.
 
+Capability status and live compatibility are related but distinct. `crossdock.agent-capabilities/v1` describes what a provider adapter currently advertises and whether that path is experimental or verified. A compatibility row records what actually happened for one specific intent, Crossdock ref, provider surface, and environment. Evidence for `implement` must never be treated as evidence for `review`, `verify`, or another intent.
+
 ## Reported environments
 
-| Date | Crossdock ref | OS | Browser | Initial → PR | PR update | Automatic | Evidence modes | Report |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| — | — | — | — | not tested | not tested | not tested | — | — |
+| Date | Crossdock ref | OS | Browser | Intent / capability | Initial → PR | PR update | Automatic | Evidence / recovery | Publication | Report |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | — | — | implement / experimental | not tested | not tested | not tested | — | — | — |
 
 Replace the placeholder row when the first public report is accepted. Keep rows concise; detailed reproduction/evidence belongs in the linked issue or comment.
+
+For the current Codex browser adapter, `implement` is the only advertised intent and remains **experimental** until authenticated live testing establishes compatibility. Disabled dashboard intents are intentionally not executable and therefore do not receive compatibility credit from implementation-path tests.
 
 ## What counts as a verified path
 
@@ -28,6 +32,8 @@ For **Initial → PR**, the intended PR must exist exactly once, the target chan
 For **PR update**, the expected existing PR head must change, a new immutable task record must be created and remotely verifiable, and the configured update-publication policy must be honored. With `link`, a new top-level update comment must link the record; with `none`, Crossdock must not create that provenance comment. The original PR body must not be rewritten merely for later provenance.
 
 For **Automatic**, the same durable outcome, privacy choices, publication choices, and safety checks must hold without the manual handoff approval step.
+
+Committed-file publication is an independent presentation path. When exercised, the report should identify `link` or `reference` and verify the file at the exact configured repository/branch/path, with create-or-identical/no-overwrite behavior and no prompt/report evidence leakage.
 
 Evidence retention and recovery persistence are independent. A compatibility report that exercises `full`, `hash`, or `omit` should say which durable evidence modes were tested. Recovery behavior should be reported separately when prompt/report memory-only modes are exercised; a deliberately unrecoverable restart is a correct result when the selected policy intentionally discarded bytes that `full`/`hash` evidence later requires.
 
