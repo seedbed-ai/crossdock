@@ -80,6 +80,13 @@ export class GitHubClient {
   }
 }
 
+export function decodeGitHubFileContent(file, context = "GitHub file read") {
+  if (!file || typeof file.content !== "string" || (file.encoding != null && file.encoding !== "base64")) throw new Error(`${context} failed: remote file missing base64 content`);
+  const encoded = file.content.replace(/\s/g, "");
+  if (!encoded || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded) || encoded.length % 4 !== 0) throw new Error(`${context} failed: remote file contains malformed base64 content`);
+  return Buffer.from(encoded, "base64");
+}
+
 function encodePath(path) {
   return path.split("/").map(encodeURIComponent).join("/");
 }

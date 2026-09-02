@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { publishExistingInitialHandoff, publishUpdateHandoff } from "../src/handoff.js";
+import { publishExistingInitialHandoff, publishInitialHandoff, publishUpdateHandoff } from "../src/handoff.js";
 import { TASK_RECORD_STORAGE_ADAPTER } from "../src/storage.js";
 
 function task(overrides = {}) {
@@ -44,8 +44,13 @@ function memoryStorage() {
 
 function github() {
   const calls = [];
+  const files = new Map();
   return {
     calls,
+    async createPullRequest(repository, payload) {
+      calls.push(["createPullRequest", repository, payload]);
+      return { number: 42, body: payload.body };
+    },
     async getPullRequest(repository, number) {
       calls.push(["getPullRequest", repository, number]);
       return { number, body: "Existing provider-created body", html_url: `https://github.com/${repository}/pull/${number}` };
@@ -61,6 +66,16 @@ function github() {
     async addIssueComment(repository, number, body) {
       calls.push(["addIssueComment", repository, number, body]);
       return { id: 9, body };
+    },
+    async getFile(repository, path, branch) {
+      calls.push(["getFile", repository, path, branch]);
+      if (!files.has(`${repository}:${branch}:${path}`)) throw Object.assign(new Error("not found"), { status: 404 });
+      return { encoding: "base64", content: Buffer.from(files.get(`${repository}:${branch}:${path}`), "utf8").toString("base64") };
+    },
+    async createFile(repository, path, content, message, branch) {
+      calls.push(["createFile", repository, path, branch]);
+      files.set(`${repository}:${branch}:${path}`, content);
+      return { commit: { sha: "publication" } };
     },
   };
 }
@@ -130,11 +145,10 @@ test("unsupported summary presentation fails before durable or GitHub mutation",
   }
 });
 
-test("configured committed-file publication fails before any mutation until implemented", async () => {
+test("configured committed-file publication executes independently for update handoff", async () => {
   const remote = github();
   const storage = memoryStorage();
-  await assert.rejects(
-    publishUpdateHandoff({
+  const result = await publishUpdateHandoff({
       github: remote,
       storage,
       task: task({ task_id: "task-update", parent_task_id: "task-parent" }),
@@ -150,9 +164,29 @@ test("configured committed-file publication fails before any mutation until impl
           path_template: "crossdock/{task_id}.md",
         },
       },
-    }),
-    /committed-file provenance publication is configured but not implemented/,
-  );
+    });
+  assert.deepEqual(result.publication.committed_file, {
+    presentation: "reference", repository: "example/provenance", branch: "main",
+    path: "crossdock/task-update.md", verification: "verified", result: "created",
+  });
+  assert.deepEqual(storage.calls.map(([name]) => name), ["persistImmutable", "verifyImmutable"]);
+  assert.ok(remote.calls.some(([name, repository]) => name === "createFile" && repository === "example/provenance"));
+});
+
+test("invalid resolved committed-file path fails before initial PR creation", async () => {
+  const remote = github();
+  const storage = memoryStorage();
+  await assert.rejects(publishInitialHandoff({
+    github: remote,
+    storage,
+    task: task({ pull_request: null }),
+    pr: { title: "Safe", summary: "Safe" },
+    publication: {
+      change_description: "none",
+      change_comment: "none",
+      committed_file: { presentation: "link", adapter: "github", repository: "example/provenance", branch: "main", path_template: "safe/{task_id}/{leftover}.md" },
+    },
+  }), /repository-relative path/);
   assert.deepEqual(remote.calls, []);
   assert.deepEqual(storage.calls, []);
 });

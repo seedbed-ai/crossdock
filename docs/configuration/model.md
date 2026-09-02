@@ -120,11 +120,15 @@ Publication choices are frozen into active browser task state at submission. Edi
 }
 ```
 
-`presentation` currently supports `link` and `reference` in the configuration contract. Crossdock deliberately does not expose a retained-record/full-record committed-file mode because that requires a separate self-reference, classification, and immutable-identity design rather than silently copying task-record bytes into another GitHub path.
+`presentation` supports `link` and `reference` in the core and loopback service. `link` writes canonical Markdown containing only the `# Crossdock provenance` heading and durable task-record URL. `reference` additionally writes the task ID and target repository, plus the pull-request number and result commit when present. Both forms use UTF-8, LF line endings, and exactly one final newline. Crossdock deliberately does not expose a retained-record/full-record committed-file mode because that requires a separate self-reference, classification, and immutable-identity design rather than silently copying task-record bytes into another GitHub path.
 
 The path template must be repository-relative, may not traverse with `..`, and must contain `{task_id}` so independent task publications cannot collide by default.
 
-**Committed-file publication is not executed by the current handoff service yet.** A configured committed-file destination fails before durable or source-control mutation. Implementation still requires classification/secret preflight, retry/idempotency handling, independent remote verification, and mapping into the provider-neutral v3 publication/artifact contract.
+The core and loopback service execute the GitHub destination only after the immutable task record has been persisted and independently verified. They resolve and revalidate the configured path and run GitHub safety preflight before creating the provenance file. Publication uses create-or-identical semantics: an absent file is created, an exact existing file is an idempotent success, and different existing bytes are a conflict that is never overwritten. In either successful case Crossdock rereads the exact configured path and branch and verifies its bytes before reporting completion. Only a genuine GitHub `404` means absence; authorization, network, and server failures remain failures.
+
+Committed-file publication never copies prompt/report plaintext, prompt/report hashes, task-record bytes, execution reports, session data, or credentials. Enabling it does not change either evidence mode or grant another evidence-publication permission.
+
+The browser dashboard does not expose committed-file settings yet and its browser policy adapter remains explicitly fail-closed when one is configured. The dashboard does not infer a destination from the target or task-record repository; browser support requires a future explicit UI for presentation, repository, branch, and path template.
 
 ## Loopback service URL
 
