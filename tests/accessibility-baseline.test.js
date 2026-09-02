@@ -16,13 +16,15 @@ test("dashboard exposes basic document and live-region semantics", () => {
 
 test("dashboard keeps form controls programmatically labeled", () => {
   for (const id of [
-    "repository", "issue", "pull-request", "handoff-mode", "service-url", "storage-repository", "storage-branch",
+    "repository", "issue", "pull-request", "handoff-mode", "work-intent", "service-url", "storage-repository", "storage-branch",
     "prompt-evidence", "report-evidence", "prompt-recovery", "report-recovery", "change-description-publication",
     "change-comment-publication", "summary", "validation", "prompt",
     "committed-file-publication", "committed-file-repository", "committed-file-branch", "committed-file-path-template",
   ]) {
     assert.match(html, new RegExp(`<label[^>]*>[\\s\\S]*?(?:<input|<select|<textarea) id="${id}"`), `${id} should remain inside a label`);
   }
+  assert.match(html, /id="work-intent" aria-describedby="work-intent-help"/);
+  assert.match(html, /id="work-intent-help"/);
 });
 
 test("dashboard CSS preserves focus, target-size, reflow, and reduced-motion guardrails", () => {
