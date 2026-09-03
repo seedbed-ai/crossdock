@@ -118,6 +118,11 @@ async function monitorTask() {
   monitoring = true;
   try {
     while (taskState) {
+      if (taskState.phase === "pr-create-integrity-error") {
+        setStatus(`PR creation integrity failure: ${taskState.pr_integrity_error}`, true);
+        return;
+      }
+
       if (taskState.phase === "pr-create-uncertain") {
         try {
           const recovered = await recoverInitialPrCreation();
@@ -200,6 +205,14 @@ async function finalizeInitial() {
     taskState.final_report = result.report;
     taskState.pr_discovery = result.discovery;
 
+    if (result.integrityError) {
+      taskState.phase = "pr-create-integrity-error";
+      taskState.pr_integrity_error = result.integrityError;
+      await saveTaskState();
+      setStatus(`PR creation integrity failure: ${result.integrityError}`, true);
+      return;
+    }
+
     if (!result.prUrl) {
       taskState.phase = "pr-create-uncertain";
       await saveTaskState();
@@ -231,6 +244,13 @@ async function recoverInitialPrCreation() {
     targetRepository: taskState.repository,
     discovery: taskState.pr_discovery,
   });
+  if (result.integrityError) {
+    taskState.phase = "pr-create-integrity-error";
+    taskState.pr_integrity_error = result.integrityError;
+    await saveTaskState();
+    setStatus(`PR creation integrity failure: ${result.integrityError}`, true);
+    return true;
+  }
   if (!result.prUrl) return false;
   await rememberCreatedPr(result.prUrl);
   return true;
@@ -526,6 +546,11 @@ async function restore() {
     assertReportAvailableForRecovery(taskState);
   } catch (error) {
     setStatus(`Cannot recover active task: ${error.message}`, true);
+    return;
+  }
+
+  if (taskState.phase === "pr-create-integrity-error") {
+    setStatus(`PR creation integrity failure: ${taskState.pr_integrity_error}`, true);
     return;
   }
 

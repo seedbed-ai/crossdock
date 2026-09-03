@@ -155,7 +155,37 @@ The complete Codex completion report was visibly rendered in the task UI, includ
 
 Crossdock correctly restored/retained phase `ready` after the failed finalization rather than claiming success. No manual Codex `Create PR` action was taken, and no new PR was created by the attempt. See #102.
 
-The current fix direction preserves the existing semantic selectors first, then adds a narrow heading-anchored fallback for the current Codex completion report: locate a visible `Summary` heading, require a later visible `Testing` section in the smallest matching ancestor, discard any preceding task/prompt chrome, deduplicate candidates, and fail closed unless exactly one structured report candidate remains. The adapter must not fall back to arbitrary whole-page text.
+PR #103 added a narrow `Summary`/`Testing` structural fallback for the current Codex completion report while retaining fail-closed behavior and avoiding arbitrary whole-page text capture. On retry, report capture succeeded and Crossdock proceeded to invoke provider `Create PR`.
+
+## Wrong-repository execution and PR creation
+
+The report-capture retry exposed a more serious repository-routing defect. Crossdock was configured throughout for target repository `seedbed-ai/crossdock-live-target`, but the Codex browser session had remained on repository/environment `sb` and base branch `arch/init`. Crossdock had not set or verified provider repository identity before submission.
+
+The task therefore executed in `seedbed-ai/sb`, not the disposable target. After Crossdock invoked `Create PR`, Codex created branch `codex/add-crossdock-live-test.txt-file` and GitHub PR `seedbed-ai/sb#177` (`Add Crossdock live test marker`) targeting `arch/init`. The PR contained the intended one-file test change, but in the wrong repository.
+
+Crossdock simultaneously continued to display repository `seedbed-ai/crossdock-live-target` and entered phase `pr-create-uncertain` with status:
+
+`Create PR was invoked, but the resulting PR URL is not visible yet. Waiting without invoking Create PR again…`
+
+Because PR discovery filtered to the configured target repository, it could not see the newly created wrong-repository PR. This is tracked as the critical routing/integrity defect #104, with focused defense-in-depth follow-ups #108, #109, and #111. The accidental PR/branch cleanup is tracked by #107 and must not be merged into Seedbed.
+
+The test stopped at this failure; the wrong-repository PR was not manually redirected or otherwise rescued. After the incident was documented, `seedbed-ai/sb#177` was closed without merge. Its head branch remained pending deletion because the available GitHub connector did not expose branch deletion.
+
+## Pre-submit repository safety guard
+
+PR #114 introduced the immediate safety barrier from #105/#110. Crossdock now passes its configured target repository into the Codex content adapter and validates visible provider repository/environment context before writing the prompt or clicking submit. This does not yet perform deterministic provider environment selection; it only prevents execution when provider context cannot be proven to match the configured target.
+
+Authenticated safety retesting after #114 showed no new task was created and Crossdock remained at `No active task` in both tested stale-context cases. On the completed wrong-repository task page, submission failed with:
+
+`Codex repository context does not match target seedbed-ai/crossdock-live-target; visible provider context: Add files and more, Start dictation, Submit`
+
+After navigating to the main Codex Cloud page and refreshing, it again failed closed before submission with:
+
+`Codex repository context does not match target seedbed-ai/crossdock-live-target; visible provider context: View all code environments, Add files and more, Search for your branch, Start dictation, Submit`
+
+No Codex task was created in either case. The safety objective therefore held, although the diagnostic context extraction is currently too noisy/generic to serve as a useful provider-context description. Automatic repository/environment selection and a more explicit provider-context model remain necessary before the E2E path can continue safely.
+
+PR #115 subsequently documented the provider-context identity model: the Crossdock target repository is canonical; provider repository/environment and base-branch identity must be resolved and verified before mutation; persisted provider mappings are hints requiring live verification; provider context must be rechecked before later mutations; and wrong-repository PR evidence is an integrity failure rather than a recovery timeout.
 
 ## Current limitations versus intended semantics
 
