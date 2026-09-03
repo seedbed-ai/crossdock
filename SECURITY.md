@@ -14,9 +14,9 @@ Use GitHub private vulnerability reporting for this repository when it is availa
 - Task-record storage must be explicitly configured and appropriate for the evidence actually retained.
 - Prompt/report collection, transient recovery state, durable task-record evidence, history, and diagnostics are distinct data-lifecycle concerns; permission at one layer does not imply permission at another.
 - User-selected `hash` or `omit` evidence modes must not silently become plaintext durable retention.
-- Common secret-like plaintext must fail closed before Crossdock writes it to a GitHub-backed task-record store, PR body, or PR comment. This preflight is defense in depth and is not a claim that pattern matching can identify every sensitive value.
+- Common secret-like plaintext must fail closed before Crossdock writes it to a GitHub-backed task-record store, PR body, PR comment, or committed provenance file. This preflight is defense in depth and is not a claim that pattern matching can identify every sensitive value.
 - Crossdock must not extract or persist authenticated provider session cookies as an application authentication mechanism.
-- Browser automation must fail closed when expected controls, task identity, repository identity, or resulting PR state is ambiguous.
+- Browser automation must fail closed when expected controls, task identity, repository identity, work intent, or resulting PR state is unsupported or ambiguous. A disabled UI option alone is not the safety boundary; unsupported or tampered work intents must be rejected before provider delegation.
 - A handoff is not complete merely because a local action succeeded; required durable remote state must be re-read and verified.
 - Non-GitHub storage adapters must define and enforce the privacy/classification behavior appropriate to their own persistence boundary rather than inheriting GitHub-specific policy by accident.
 
