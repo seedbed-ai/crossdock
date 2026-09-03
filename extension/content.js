@@ -24,13 +24,73 @@ function captureLatestAssistantResponse() {
   return nodes.at(-1);
 }
 
-function submitCodexPrompt(prompt) {
+async function submitCodexPrompt(prompt) {
   requireCodexPage();
   if (typeof prompt !== "string" || !prompt.trim()) throw new Error("Codex prompt is empty");
-  const input = findUniqueVisible(["textarea", '[contenteditable="true"][role="textbox"]', '[contenteditable="true"][data-placeholder]'], "Codex prompt input");
+
+  const input = findCodexPromptInput(true);
   setEditableValue(input, prompt);
-  findUniqueButton(["Create task", "Start task", "Run task", "Submit"]).click();
-  return { taskUrl: location.href };
+
+  const beforeUrl = location.href;
+  findCodexSubmitButton(true).click();
+
+  const taskUrl = await waitForCodexSubmission({ beforeUrl, prompt });
+  return { taskUrl };
+}
+
+async function waitForCodexSubmission({ beforeUrl, prompt }) {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    if (location.href !== beforeUrl) return location.href;
+
+    const currentInput = findCodexPromptInput(false);
+    const currentValue = currentInput ? editableValue(currentInput) : "";
+    const composerNoLongerContainsPrompt = !currentInput || currentValue !== prompt;
+    const submitStillAvailable = Boolean(findCodexSubmitButton(false));
+
+    // Codex may transition in place before assigning a task URL. Require both
+    // the submitted prompt to leave the composer and the submit/start control
+    // to disappear before claiming that submission succeeded.
+    if (composerNoLongerContainsPrompt && !submitStillAvailable) return location.href;
+
+    await sleep(100);
+  }
+
+  throw new Error("Codex task submission was not confirmed; the task may still be waiting in the composer");
+}
+
+function findCodexPromptInput(required = true) {
+  const selectors = ["textarea", '[contenteditable="true"][role="textbox"]', '[contenteditable="true"][data-placeholder]'];
+  const nodes = [...new Set(selectors.flatMap((selector) => [...document.querySelectorAll(selector)]))].filter(isVisible);
+  if (nodes.length > 1) throw new Error(`Codex prompt input must resolve to at most one visible element; found ${nodes.length}`);
+  if (required && nodes.length !== 1) throw new Error(`Codex prompt input must resolve to exactly one visible element; found ${nodes.length}`);
+  return nodes[0] ?? null;
+}
+
+function findCodexSubmitButton(required = true) {
+  const semanticSelectors = [
+    'button[data-testid="send-button"]',
+    'button[data-testid="composer-submit-button"]',
+    '[role="button"][data-testid="send-button"]',
+    '[role="button"][data-testid="composer-submit-button"]',
+  ];
+  const semantic = [...new Set(semanticSelectors.flatMap((selector) => [...document.querySelectorAll(selector)]))]
+    .filter(isVisible)
+    .filter(isEnabled);
+
+  if (semantic.length > 1) throw new Error(`Codex submit control is ambiguous; found ${semantic.length} semantic candidates`);
+  if (semantic.length === 1) return semantic[0];
+
+  const labels = ["Create task", "Start task", "Run task", "Submit", "Send"];
+  const normalizedLabels = new Set(labels.map((label) => label.toLowerCase()));
+  const buttons = [...document.querySelectorAll('button, [role="button"]')]
+    .filter(isVisible)
+    .filter(isEnabled)
+    .filter((node) => normalizedLabels.has(accessibleText(node).toLowerCase()));
+
+  if (buttons.length > 1) throw new Error(`Codex submit control is ambiguous; found ${buttons.length} label candidates`);
+  if (required && buttons.length !== 1) throw new Error(`required Codex submit control not found; expected one of: ${labels.join(", ")}`);
+  return buttons[0] ?? null;
 }
 
 function inspectCodexTask() {
@@ -68,12 +128,6 @@ function findPullRequestLinks(targetRepository) {
     .filter((href) => href.startsWith(prefix) && /\/pull\/\d+(?:$|[?#])/.test(href));
 }
 
-function findUniqueVisible(selectors, label) {
-  const nodes = [...new Set(selectors.flatMap((selector) => [...document.querySelectorAll(selector)]))].filter(isVisible);
-  if (nodes.length !== 1) throw new Error(`${label} must resolve to exactly one visible element; found ${nodes.length}`);
-  return nodes[0];
-}
-
 function findUniqueButton(labels) {
   const button = findButton(labels, false);
   if (!button) throw new Error(`no unique visible button found for: ${labels.join(", ")}`);
@@ -87,6 +141,12 @@ function findButton(labels, required) {
   if (buttons.length > 1) throw new Error(`button selector is ambiguous for: ${labels.join(", ")}`);
   if (required && buttons.length !== 1) throw new Error(`required button not found: ${labels.join(", ")}`);
   return buttons[0] ?? null;
+}
+
+function editableValue(node) {
+  if (node instanceof HTMLTextAreaElement || node instanceof HTMLInputElement) return node.value;
+  if (node.isContentEditable) return node.textContent ?? "";
+  return "";
 }
 
 function setEditableValue(node, value) {
@@ -112,4 +172,6 @@ function setEditableValue(node, value) {
 function accessibleText(node) { return normalizeText(node.getAttribute("aria-label") || node.innerText || node.textContent || ""); }
 function normalizeText(value) { return String(value ?? "").replace(/\r\n?/g, "\n").trim(); }
 function isVisible(node) { const style = getComputedStyle(node); const rect = node.getBoundingClientRect(); return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0; }
+function isEnabled(node) { return !node.disabled && node.getAttribute("aria-disabled") !== "true"; }
 function requireCodexPage() { if (!location.pathname.startsWith("/codex")) throw new Error("active ChatGPT tab is not a Codex page"); }
+function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
