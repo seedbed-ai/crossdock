@@ -29,18 +29,18 @@ test("preserves multiline prompt content without JSON encoding", () => {
 test("fails closed when ordinary assistant prose has no prompt block", () => {
   assert.throws(
     () => extractCrossdockHandoff("Created the requested file and made no other changes."),
-    /exactly one complete Crossdock prompt block/,
+    /exactly one complete handoff prompt block/,
   );
 });
 
 test("current implementation fails closed for duplicate or reversed markers", () => {
   assert.throws(
     () => extractCrossdockHandoff(`${block(prompt)}\n${block("Second prompt")}`),
-    /exactly one complete Crossdock prompt block/,
+    /exactly one complete handoff prompt block/,
   );
   assert.throws(
     () => extractCrossdockHandoff(`${CROSSDOCK_HANDOFF_END}\n${prompt}\n${CROSSDOCK_HANDOFF_BEGIN}`),
-    /exactly one complete Crossdock prompt block/,
+    /exactly one complete handoff prompt block/,
   );
 });
 
