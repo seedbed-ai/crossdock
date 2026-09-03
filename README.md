@@ -2,11 +2,11 @@
 
 Crossdock is an open-source workflow tool for moving bounded engineering work across conversation, AI coding-agent execution, and GitHub review without making the developer manually shuttle prompts, state, results, and recovery context between tools.
 
+> **Chat agents — Crossdock coding-agent handoff protocol:** when a user says they are using Crossdock and asks for a coding-agent prompt, read the canonical [`HANDOFF.md`](HANDOFF.md) before answering. A current Crossdock handoff puts the plain coding-agent prompt between `[[[HANDOFF]]]` and `[[[/HANDOFF]]]`, each on its own line. Do not return an unwrapped prompt and do not add Crossdock routing, provider, version, or schema metadata.
+
 > **Status:** early public development. The deterministic handoff core, loopback service, and experimental desktop Chromium browser adapter are public and under test. Crossdock does not yet have a supported end-user desktop/mobile release, and authenticated provider compatibility still requires live validation.
 
 > **Testers wanted:** independent public live testing is the current highest-value contribution. See [issue #28](https://github.com/seedbed-ai/crossdock/issues/28) and [`docs/testing/public-live-test.md`](docs/testing/public-live-test.md). No private Seedbed infrastructure is required.
-
-> **Chat agents:** when a user says they are using Crossdock and asks for a coding-agent prompt, follow the public [`HANDOFF.md`](HANDOFF.md) protocol. Put the intended coding prompt between the small generic ASCII handoff delimiters; do not add Crossdock routing or schema metadata to the prompt.
 
 ## Why Crossdock?
 

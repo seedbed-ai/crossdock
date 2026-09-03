@@ -35,9 +35,11 @@ Immediately after reloading the unpacked extension, capture initially reported:
 
 `Could not establish connection. Receiving end does not exist.`
 
-Refreshing both the Crossdock dashboard and the existing ChatGPT tab caused the current content script to be injected, after which capture reached the new parser and returned the expected envelope-validation error. Test instructions should explicitly account for refreshing provider tabs after an unpacked extension reload when content scripts changed.
+Refreshing both the Crossdock dashboard and the existing ChatGPT tab caused the current content script to be injected, after which capture reached the parser. Test instructions should explicitly account for refreshing provider tabs after an unpacked extension reload when content scripts changed.
 
 The dashboard retained the previously captured prompt text after a failed capture. This is consistent with capture assigning new prompt text only after a successful result, but the stale value can be confusing and should be considered in future UX/error-state work.
+
+A visible NUL-like trailing character was also repeatedly observed after dashboard status messages, including connection and parser errors. Its source and significance were not established during this test and should be investigated separately rather than assumed to be part of the underlying error.
 
 ## Protocol design conclusions
 
@@ -64,6 +66,47 @@ Visible delimiters are preferred to invisible whitespace/control characters beca
 
 See #92 for the general producer-responsibility principle.
 
+## Post-merge minimal-delimiter retry
+
+After PR #95 merged the generic ASCII delimiter contract, the authenticated test was retried using a natural request equivalent to “We're using Crossdock. Give me the coding-agent prompt …”. ChatGPT produced semantically correct coding-agent prompt text but omitted both required handoff markers.
+
+The first capture attempt after the extension reload again returned:
+
+`Could not establish connection. Receiving end does not exist.`
+
+The dashboard still displayed the much older successfully captured text. After force-refreshing the ChatGPT tab and refreshing Crossdock, capture reached the current parser and correctly failed closed with:
+
+`latest ChatGPT assistant response must contain exactly one complete handoff prompt block`
+
+No captured prompt was manually edited and no Codex task was created.
+
+## Post-hoc agent interrogation
+
+The same ChatGPT conversation was explicitly asked for a cautious post-hoc account of its discovery actions and why it omitted the markers. This evidence must be taken as agent-reported/reconstructed evidence rather than hidden execution telemetry.
+
+The agent reported recoverable web searches for:
+
+- `Crossdock coding agent prompt schema crossdock-live-test.txt seedbed-ai`
+- `"Crossdock" "coding-agent" prompt schema`
+
+It also reported a preserved browser/search summary saying `Searched 13 websites`. It could not establish that it opened the Crossdock repository, README, `HANDOFF.md`, or another canonical Crossdock document, and could not name any public source it treated as authoritative.
+
+The agent reported no evidence that it knew the current delimiters before answering and no evidence that Markdown, rendering, safety policy, instruction hierarchy, or UI behavior removed them. Its high-confidence root-cause hypothesis was that it recognized Crossdock enough to initiate public search but did not complete authoritative protocol discovery/validation; it then interpreted “give me the coding-agent prompt” as a request for the human-readable payload and returned that payload without the machine-consumable handoff boundaries.
+
+This suggests three distinct discovery/compliance stages worth testing separately:
+
+1. **Recognition:** does the natural mention of Crossdock trigger protocol discovery behavior?
+2. **Authority resolution:** does the agent locate and treat the canonical Crossdock specification as normative?
+3. **Output compliance:** does it validate the emitted handoff against that specification?
+
+This authenticated retry provides evidence that recognition occurred but authority resolution did not complete. Because the account already had substantial Crossdock context, it still does not prove independent public discoverability. See #94.
+
+## Discovery-hardening consequence
+
+A repository-root `HANDOFF.md` can be public and authoritative without being reliably surfaced by natural web search. Crossdock's discovery surface should therefore make likely search phrases such as “Crossdock coding agent prompt”, “Crossdock coding-agent handoff protocol”, and “Crossdock handoff format” lead as directly as practical to the normative contract.
+
+The repository README and `HANDOFF.md` should front-load the exact delimiter requirement and clearly identify `HANDOFF.md` as authoritative. Search indexing may lag publication, so immediate retries after documentation changes are integration experiments rather than proof of search-engine discoverability.
+
 ## Current limitations versus intended semantics
 
 For initial live testing, the implementation may temporarily accept one prompt block in the latest visible assistant response. This is an implementation constraint, not a permanent protocol rule.
@@ -75,4 +118,5 @@ Crossdock should eventually scan an appropriate conversation scope and preserve 
 - Stop at an observed Crossdock boundary failure rather than manually rescuing the workflow.
 - Do not submit stale or malformed captured text to Codex merely to force an end-to-end success.
 - Record authenticated compatibility separately from public protocol discoverability.
+- Treat post-hoc agent accounts as useful supporting evidence, not authoritative hidden traces.
 - Future discoverability testing must use an environment without prior Crossdock account/context contamination as described in #94.
