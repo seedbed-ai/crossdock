@@ -22,8 +22,13 @@ async function handleMessage(message) {
       return { ...handoff, url: captured.url };
     }
     case "crossdock.submitCodex": {
+      const stored = await chrome.storage.local.get("dashboard");
+      const targetRepository = stored.dashboard?.repository?.trim();
+      if (typeof targetRepository !== "string" || !/^[^/\s]+\/[^/\s]+$/.test(targetRepository)) {
+        throw new Error("target repository must be configured as owner/repo before Codex submission");
+      }
       const tab = await ensureCodexTab();
-      const result = await sendToTab(tab.id, { type: "crossdock.submitCodex", prompt: message.prompt });
+      const result = await sendToTab(tab.id, { type: "crossdock.submitCodex", prompt: message.prompt, targetRepository });
       await chrome.tabs.update(tab.id, { active: true });
       return result;
     }
