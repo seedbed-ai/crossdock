@@ -1,5 +1,5 @@
-export const CROSSDOCK_HANDOFF_BEGIN = "⟦CROSSDOCK⟧";
-export const CROSSDOCK_HANDOFF_END = "⟦/CROSSDOCK⟧";
+export const CROSSDOCK_HANDOFF_BEGIN = "[[[HANDOFF]]]";
+export const CROSSDOCK_HANDOFF_END = "[[[/HANDOFF]]]";
 
 export function extractCrossdockHandoff(assistantResponse) {
   if (typeof assistantResponse !== "string" || !assistantResponse.trim()) {
@@ -13,11 +13,11 @@ export function extractCrossdockHandoff(assistantResponse) {
   // Single-block/latest-response capture is a temporary implementation limit,
   // not a protocol rule. See the public handoff documentation and issue #93.
   if (starts.length !== 1 || ends.length !== 1 || ends[0] <= starts[0]) {
-    throw new Error("latest ChatGPT assistant response must contain exactly one complete Crossdock prompt block");
+    throw new Error("latest ChatGPT assistant response must contain exactly one complete handoff prompt block");
   }
 
   const prompt = lines.slice(starts[0] + 1, ends[0]).join("\n").trim();
-  if (!prompt) throw new Error("Crossdock prompt block is empty");
+  if (!prompt) throw new Error("Handoff prompt block is empty");
 
   return Object.freeze({ prompt });
 }
