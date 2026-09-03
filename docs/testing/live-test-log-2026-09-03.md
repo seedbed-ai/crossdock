@@ -39,7 +39,7 @@ Refreshing both the Crossdock dashboard and the existing ChatGPT tab caused the 
 
 The dashboard retained the previously captured prompt text after a failed capture. This is consistent with capture assigning new prompt text only after a successful result, but the stale value can be confusing and should be considered in future UX/error-state work.
 
-A visible NUL-like trailing character was also repeatedly observed after dashboard status messages, including connection and parser errors. Its source and significance were not established during this test and should be investigated separately rather than assumed to be part of the underlying error.
+A visible NUL-like trailing character was also repeatedly observed after dashboard status messages, including connection and parser errors. It later appeared when copying text from non-Crossdock tabs as well, so the leading hypothesis is now an RDP/clipboard-path artifact rather than Crossdock output. It remains tracked separately in #98 and is not treated as a blocker unless reproduced outside that environment.
 
 ## Protocol design conclusions
 
@@ -106,6 +106,56 @@ This authenticated retry provides evidence that recognition occurred but authori
 A repository-root `HANDOFF.md` can be public and authoritative without being reliably surfaced by natural web search. Crossdock's discovery surface should therefore make likely search phrases such as “Crossdock coding agent prompt”, “Crossdock coding-agent handoff protocol”, and “Crossdock handoff format” lead as directly as practical to the normative contract.
 
 The repository README and `HANDOFF.md` should front-load the exact delimiter requirement and clearly identify `HANDOFF.md` as authoritative. Search indexing may lag publication, so immediate retries after documentation changes are integration experiments rather than proof of search-engine discoverability.
+
+## Discovery-hardened authenticated retry
+
+After the README/`HANDOFF.md` discovery hardening merged, the same natural user request was issued in a fresh ChatGPT conversation. ChatGPT emitted the current canonical marker block:
+
+```text
+[[[HANDOFF]]]
+Add a file named crossdock-live-test.txt containing a short statement that this repository is a disposable Crossdock integration test. Make no other changes.
+[[[/HANDOFF]]]
+```
+
+Crossdock then captured exactly the inner coding prompt and reported `Captured Crossdock handoff prompt.` This is the first successful authenticated ChatGPT → Crossdock capture boundary using the minimal generic protocol. Because the account already had Crossdock context, it remains integration evidence rather than independent-discoverability proof.
+
+The stale-prompt ambiguity observed earlier was fixed separately: a new capture attempt now invalidates the old prompt before provider/parser work, so a failed capture cannot leave older text available as though it were current. See #97 and PR #99.
+
+## Codex submission boundary
+
+The first `Create Codex task` attempt populated the Codex composer but did not press the current blue submit/start control. Crossdock nevertheless entered phase `running` and began waiting for `Create PR`. The tester did not manually click the Codex button, preserving the failure. See #100.
+
+Source diagnosis showed that the adapter relied on a narrow text-label set and returned success immediately after `.click()` without proving Codex accepted the task. PR #101 expanded semantic/current submit-control recognition and added positive submission verification. The adapter now fails closed unless the task URL changes or the prompt leaves the composer and the submit control disappears.
+
+After clearing only the false local active-task state from the failed test, reloading the extension, and retrying the same boundary, Crossdock switched to Codex and started the task automatically with one click. The dashboard's `running` phase then matched the provider's actual state.
+
+## Codex task completion boundary
+
+The authenticated Codex task completed in approximately 1m28s. The submitted prompt was preserved exactly. Codex produced exactly one intended change:
+
+- new file `crossdock-live-test.txt`;
+- content: `This repository is a disposable Crossdock integration test.`;
+- commit shown by Codex: `0674743` (`Add Crossdock live test marker`).
+
+Visible Codex validation included `git diff --check`, `git status --short --branch`, `git show --stat --oneline --decorate HEAD`, and `nl -ba crossdock-live-test.txt`.
+
+Codex's report said it could not create a pull request from inside its task environment because no `make_pr` tool or Git remote was available. This was not treated as a failure because the authenticated Codex browser UI exposed `Create PR`, which is the external action Crossdock is designed to invoke. Crossdock independently detected that readiness and transitioned to phase `ready` with status:
+
+`Task is ready. Review the task and choose Finalize new PR.`
+
+Review-before-handoff behavior therefore worked at this boundary.
+
+## Finalize-new-PR report-capture failure
+
+Clicking Crossdock `Finalize new PR` failed before PR creation with:
+
+`unable to identify the complete Codex report from known semantic selectors`
+
+The complete Codex completion report was visibly rendered in the task UI, including `Summary` and `Testing` sections, and the UI still exposed `Create PR`. Crossdock's existing report selectors only recognized older report-specific `data-testid` values or ChatGPT-style assistant-message markers, none of which matched this current Codex rendering.
+
+Crossdock correctly restored/retained phase `ready` after the failed finalization rather than claiming success. No manual Codex `Create PR` action was taken, and no new PR was created by the attempt. See #102.
+
+The current fix direction preserves the existing semantic selectors first, then adds a narrow heading-anchored fallback for the current Codex completion report: locate a visible `Summary` heading, require a later visible `Testing` section in the smallest matching ancestor, discard any preceding task/prompt chrome, deduplicate candidates, and fail closed unless exactly one structured report candidate remains. The adapter must not fall back to arbitrary whole-page text.
 
 ## Current limitations versus intended semantics
 
