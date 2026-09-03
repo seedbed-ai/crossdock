@@ -3,6 +3,15 @@ import assert from "node:assert/strict";
 import { GitHubClient, decodeGitHubFileContent } from "../src/github-client.js";
 function response(status, payload) { return { ok: status >= 200 && status < 300, status, async text() { return payload == null ? "" : JSON.stringify(payload); } }; }
 
+test("GitHubClient reads repository metadata", async () => {
+  const calls = [];
+  const client = new GitHubClient({ token: "test-token", fetchImpl: async (url, options) => { calls.push([url, options]); return response(200, { default_branch: "main" }); } });
+  const repository = await client.getRepository("example/project");
+  assert.equal(repository.default_branch, "main");
+  assert.equal(calls[0][0], "https://api.github.com/repos/example/project");
+  assert.equal(calls[0][1].method, "GET");
+});
+
 test("GitHubClient creates UTF-8 files with base64 content", async () => {
   const calls = []; const client = new GitHubClient({ token: "test-token", fetchImpl: async (url, options) => { calls.push([url, options]); return response(201, { commit: { sha: "abc123" } }); } });
   await client.createFile("example/private-task-records", "crossdock/tasks/a b.md", "hello", "record task", "main");
