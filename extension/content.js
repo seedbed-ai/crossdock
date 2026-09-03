@@ -7,7 +7,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 async function handleMessage(message) {
   switch (message.type) {
-    case "crossdock.capturePrompt": return { prompt: captureLatestAssistantMessage(), url: location.href };
+    case "crossdock.capturePrompt": return { assistantResponse: captureLatestAssistantResponse(), url: location.href };
     case "crossdock.submitCodex": return submitCodexPrompt(message.prompt);
     case "crossdock.inspectCodex": return inspectCodexTask();
     case "crossdock.findPrUrls": return { prUrls: findPullRequestLinks(message.targetRepository) };
@@ -17,7 +17,7 @@ async function handleMessage(message) {
   }
 }
 
-function captureLatestAssistantMessage() {
+function captureLatestAssistantResponse() {
   const nodes = [...document.querySelectorAll('[data-message-author-role="assistant"]')]
     .filter(isVisible).map((node) => normalizeText(node.innerText)).filter(Boolean);
   if (!nodes.length) throw new Error("no visible ChatGPT assistant message found");
