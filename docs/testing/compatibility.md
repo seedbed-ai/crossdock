@@ -19,9 +19,10 @@ Capability status and live compatibility are related but distinct. `crossdock.ag
 
 | Date | Crossdock ref | OS | Browser | Intent / capability | Initial → PR | PR update | Automatic | Evidence / recovery | Publication | Report |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| — | — | — | — | implement / experimental | not tested | not tested | not tested | — | — | — |
+| 2026-09-03 | `525a03a` | Windows Server (EC2) | Chrome | implement / experimental | **failed** — Codex task completed, but stale provider repository context caused Crossdock to create `seedbed-ai/sb#177` instead of a PR in the configured disposable target | not tested | not tested | prompt/report `hash`; prompt/report recovery `persist` | initial PR link configured; final provenance stage not reached | [live-test log](live-test-log-2026-09-03.md), #104 |
+| 2026-09-03 | `0393d0e` | Windows Server (EC2) | Chrome | implement / experimental | **partial** — pre-submit repository guard correctly stopped stale/unresolved Codex context before task creation; E2E remained blocked pending deterministic environment selection | not tested | not tested | prompt/report `hash`; prompt/report recovery `persist` | not reached | [live-test log](live-test-log-2026-09-03.md), #104, #108 |
 
-Replace the placeholder row when the first public report is accepted. Keep rows concise; detailed reproduction/evidence belongs in the linked issue or comment.
+These rows come from one authenticated integration session in an account that already had Crossdock conversational context. They establish browser/provider behavior, not independent public handoff discoverability; see #94. The first row records a safety failure rather than compatibility success. The second records the subsequent fail-closed mitigation and should not be interpreted as a completed Initial → PR path.
 
 For the current Codex browser adapter, `implement` is the only advertised intent and remains **experimental** until authenticated live testing establishes compatibility. The dashboard validates that intent before provider delegation or an update-task PR snapshot and freezes it in active recovery state. Disabled dashboard intents are presentational hints rather than the safety boundary: manipulated, empty, or unknown values fail closed and do not receive compatibility credit from implementation-path tests.
 
