@@ -83,7 +83,7 @@ Set:
 - the report evidence policy;
 - the prompt recovery policy;
 - the report recovery policy;
-- the initial-PR provenance publication choice; and
+- the initial-PR provenance publication choice;
 - the update provenance publication choice; and
 - optionally, committed-file provenance with an explicit presentation, repository, branch, and path template containing `{task_id}`.
 
@@ -119,7 +119,7 @@ The work intent is likewise captured when the task starts. As a fail-closed chec
 
 Use a deliberately small, reversible change in the disposable target repository, such as adding one harmless text file.
 
-For the baseline run, leave **Initial PR provenance** set to publish the task-record link and **Prompt recovery** set to persist for restart recovery.
+For the baseline run, leave **Initial PR provenance** set to publish the task-record link and set both **Prompt recovery** and **Report crash recovery** to persist for restart recovery. Exercise memory-only recovery only after the baseline handoff succeeds.
 
 Capture the intended prompt with Crossdock and submit it to the coding agent. When the task becomes ready, review it before choosing **Finalize new PR**.
 
@@ -167,9 +167,9 @@ Verify that normal in-page execution can proceed, then inspect only your own loc
 
 For restart behavior, use a second disposable memory-only task. If prompt evidence is `full` or `hash`, restart/reload after submission and verify Crossdock reports that prompt content is unavailable instead of silently recapturing or reconstructing it. If prompt evidence is `omit`, verify recovery can continue without prompt content when the rest of the provider state remains recoverable.
 
-## 10. Exercise memory-only report recovery (Thursday)
+## 10. Exercise memory-only report recovery
 
-On Thursday's disposable test run, select **Report crash recovery: Memory only** independently of prompt recovery. First restart the dashboard while the provider task is still running, before report capture, and verify that monitoring can resume. Then complete a separate task without restarting and verify that normal in-page finalization succeeds while persisted active-task snapshots contain no `final_report`. Change the visible report-recovery selector after submission and verify that the task remains frozen to memory-only.
+On a disposable test run, select **Report crash recovery: Memory only** independently of prompt recovery. First restart the dashboard while the provider task is still running, before report capture, and verify that monitoring can resume. Then complete a separate task without restarting and verify that normal in-page finalization succeeds while persisted active-task snapshots contain no `final_report`. Change the visible report-recovery selector after submission and verify that the task remains frozen to memory-only.
 
 Where provider timing makes the boundary practical to exercise safely, use separate disposable post-capture cases: with durable report evidence `full` and `hash`, restart after capture and verify a clear unavailable-original-bytes failure; with report evidence `omit`, verify recovery continues without report content. Do not trigger provider actions again, recapture a report, manually reconstruct it, or accept an evidence downgrade to rescue these cases.
 
@@ -190,9 +190,9 @@ As an optional frozen-policy recovery check, start a task with publication set o
 
 PR-body/comment `summary` remains reserved but unimplemented; do not treat it as a live-test option.
 
-## 12. Optional committed-file exercise (Thursday)
+## 12. Optional committed-file exercise
 
-For Thursday's disposable run, select **Link** or **Reference** under **Committed-file provenance** and explicitly enter a private or otherwise appropriate disposable GitHub repository, branch, and repository-relative path such as `crossdock/{task_id}.md`. Do not reuse sensitive evidence or assume the target/task-record repository is the destination.
+For a disposable run, select **Link** or **Reference** under **Committed-file provenance** and explicitly enter a private or otherwise appropriate disposable GitHub repository, branch, and repository-relative path such as `crossdock/{task_id}.md`. Do not reuse sensitive evidence or assume the target/task-record repository is the destination.
 
 Verify that the file is created at the exact configured repository, branch, and resolved path. Its deterministic link/reference content must contain no prompt or report evidence. Retry or recover the handoff and confirm create-or-identical behavior neither overwrites nor duplicates the file. After submitting another task, change all visible committed-file fields before finalization and confirm the active task still publishes only to its original frozen destination. A missing or partial destination must fail before coding-agent delegation or source mutation.
 
