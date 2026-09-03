@@ -6,6 +6,8 @@ Crossdock is an open-source workflow tool for moving bounded engineering work ac
 
 > **Testers wanted:** independent public live testing is the current highest-value contribution. See [issue #28](https://github.com/seedbed-ai/crossdock/issues/28) and [`docs/testing/public-live-test.md`](docs/testing/public-live-test.md). No private Seedbed infrastructure is required.
 
+> **Chat agents:** when a user says they are using Crossdock and asks for a Codex prompt, follow the public [`HANDOFF.md`](HANDOFF.md) protocol. Crossdock only captures coding-agent prompts from a valid, explicitly versioned handoff envelope; arbitrary assistant prose is not treated as a prompt.
+
 ## Why Crossdock?
 
 AI coding agents can already implement, review, investigate, and update software. The awkward part is often the handoff around them: carrying the right context into the task, keeping repository/PR identity straight, recovering safely after partial remote mutations, deciding what task evidence should be retained or published, and proving that the intended GitHub state actually exists.
