@@ -1,3 +1,5 @@
+import { extractCrossdockHandoff } from "./chat-agent-handoff.js";
+
 const CHATGPT_URL = "https://chatgpt.com/";
 const CODEX_URL = "https://chatgpt.com/codex/cloud";
 const DASHBOARD_URL = chrome.runtime.getURL("dashboard.html");
@@ -15,7 +17,9 @@ async function handleMessage(message) {
   switch (message.type) {
     case "crossdock.capturePrompt": {
       const tab = await findChatGptTab(false);
-      return sendToTab(tab.id, { type: "crossdock.capturePrompt" });
+      const captured = await sendToTab(tab.id, { type: "crossdock.capturePrompt" });
+      const handoff = extractCrossdockHandoff(captured.assistantResponse);
+      return { ...handoff, url: captured.url };
     }
     case "crossdock.submitCodex": {
       const tab = await ensureCodexTab();
