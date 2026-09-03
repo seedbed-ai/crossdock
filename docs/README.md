@@ -30,6 +30,7 @@ Crossdock is in early public development. These documents describe the intended 
 - [`architecture/overview.md`](architecture/overview.md) — evolving technical architecture.
 - [`architecture/security-boundaries.md`](architecture/security-boundaries.md) — public source, browser sessions, credentials, and task data.
 - [`architecture/browser-integration.md`](architecture/browser-integration.md) — browser-control strategy and fail-closed requirements.
+- [`architecture/provider-context.md`](architecture/provider-context.md) — canonical target-repository identity, provider environment mapping, branch verification, and recovery semantics.
 - [`architecture/live-testing.md`](architecture/live-testing.md) — authenticated-provider validation checklist and failure cases.
 
 ## Development and reference
