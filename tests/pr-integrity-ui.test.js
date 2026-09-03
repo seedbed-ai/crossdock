@@ -20,6 +20,13 @@ test("new wrong-repository PR evidence becomes an integrity failure", () => {
   assert.match(dashboard, /PR creation integrity failure/);
 });
 
+test("legacy target-only discovery baselines cannot manufacture cross-repository incidents", () => {
+  assert.match(background, /crossRepositorySafe: true/);
+  assert.match(background, /crossRepositorySafe: false/);
+  assert.match(background, /if \(!baseline\.crossRepositorySafe\)/);
+  assert.match(background, /repositoryFromGitHubPrUrl\(url\) === targetRepository/);
+});
+
 test("integrity failure is persisted instead of entering uncertain retry", () => {
   const integrityIndex = dashboard.indexOf("if (result.integrityError)");
   const uncertainIndex = dashboard.indexOf('taskState.phase = "pr-create-uncertain"');
