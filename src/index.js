@@ -4,6 +4,7 @@ export { COMMITTED_FILE_PRESENTATIONS, CONFIG_SCHEMA, CONFIG_SCOPES, DEFAULT_CON
 export { GitHubClient } from "./github-client.js";
 export { buildPrBody, buildUpdateComment, persistTaskRecord, publishExistingInitialHandoff, publishInitialHandoff, publishUpdateHandoff } from "./handoff.js";
 export { createHandoffServer } from "./http-server.js";
+export { REVIEW_RESULT_SCHEMA, bindReviewResult, validateReviewResult } from "./review-result.js";
 export { assertGithubSafe } from "./security.js";
 export { DEFAULT_SERVICE_URL, normalizeServiceUrl, parseServicePort } from "./service-endpoint.js";
 export { dispatchHandoff, hydrateTaskFromPullRequest } from "./service.js";
