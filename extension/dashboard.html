@@ -35,7 +35,7 @@
     <section class="grid" aria-label="Task setup">
       <label>Target repository <input id="repository" placeholder="owner/repo" autocomplete="off"></label>
       <label>Issue <input id="issue" inputmode="numeric" placeholder="optional"></label>
-      <label>Existing PR <input id="pull-request" inputmode="numeric" placeholder="blank for a new PR"></label>
+      <label>Existing PR <input id="pull-request" inputmode="numeric" placeholder="blank for new PR"></label>
       <label>Handoff mode
         <select id="handoff-mode"><option value="review">Review before handoff</option><option value="automatic">Automatic</option></select>
       </label>
@@ -92,6 +92,11 @@
     </section>
 
     <label class="prompt">Captured prompt <textarea id="prompt" rows="10" readonly></textarea></label>
+
+    <footer class="site-footer">
+      <p><a href="https://github.com/seedbed-ai/crossdock" target="_blank" rel="noopener noreferrer">Crossdock</a> is an open-source project by <a href="https://github.com/seedbed-ai" target="_blank" rel="noopener noreferrer">Seedbed</a>.</p>
+      <p>© 2026 Seedbed · <a href="https://github.com/seedbed-ai/crossdock/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">GNU AGPL v3</a></p>
+    </footer>
   </main>
   <script type="module" src="dashboard.js"></script>
   <script type="module" src="task-state-view.js"></script>
