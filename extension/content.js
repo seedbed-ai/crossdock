@@ -116,10 +116,60 @@ function prepareBranchUpdate(captureReport = true) {
 
 function captureCodexReport() {
   const selectors = ['[data-testid="codex-task-report"]', '[data-testid*="final-report"]', '[data-testid*="task-report"]', '[data-message-author-role="assistant"]'];
-  const candidates = selectors.flatMap((selector) => [...document.querySelectorAll(selector)])
-    .filter(isVisible).map((node) => normalizeText(node.innerText)).filter(Boolean);
-  if (!candidates.length) throw new Error("unable to identify the complete Codex report from known semantic selectors");
-  return candidates.at(-1);
+  const semanticCandidates = [...new Set(selectors.flatMap((selector) => [...document.querySelectorAll(selector)]))]
+    .filter(isVisible)
+    .map((node) => normalizeText(node.innerText))
+    .filter(Boolean);
+  if (semanticCandidates.length) return semanticCandidates.at(-1);
+
+  const structuredCandidates = findHeadingAnchoredCodexReports();
+  if (structuredCandidates.length !== 1) {
+    throw new Error(`unable to identify the complete Codex report from known semantic structure; found ${structuredCandidates.length} candidates`);
+  }
+  return structuredCandidates[0];
+}
+
+function findHeadingAnchoredCodexReports() {
+  const headings = [...document.querySelectorAll('h1, h2, h3, h4, h5, h6, [role="heading"]')]
+    .filter(isVisible)
+    .filter((node) => normalizeText(node.innerText || node.textContent) === "Summary");
+
+  const reports = [];
+  for (const summary of headings) {
+    const report = reportTextFromSummaryHeading(summary);
+    if (report) reports.push(report);
+  }
+  return [...new Set(reports)];
+}
+
+function reportTextFromSummaryHeading(summary) {
+  let node = summary;
+  for (let depth = 0; node && depth < 8; depth += 1, node = node.parentElement) {
+    if (!isVisible(node)) continue;
+    const text = normalizeText(node.innerText);
+    if (!text) continue;
+
+    const sliced = sliceCodexReportText(text);
+    if (sliced) return sliced;
+  }
+  return null;
+}
+
+function sliceCodexReportText(text) {
+  const lines = normalizeText(text).split("\n").map((line) => line.trim()).filter(Boolean);
+  const summaryIndex = lines.findIndex((line) => line === "Summary");
+  if (summaryIndex < 0) return null;
+
+  const testingIndex = lines.findIndex((line, index) => index > summaryIndex && line === "Testing");
+  if (testingIndex < 0) return null;
+
+  // The current Codex task UI renders the completion report as a structured
+  // Summary/Testing block without the old report-specific data-testid. Anchor
+  // on those visible semantic headings and take the smallest ancestor that
+  // contains both, then discard any prompt/task chrome that precedes Summary.
+  const reportLines = lines.slice(summaryIndex);
+  if (reportLines.length < 4) return null;
+  return reportLines.join("\n");
 }
 
 function findPullRequestLinks(targetRepository) {
