@@ -16,7 +16,7 @@ test("provider environment resolves by canonical repository identity", () => {
   assert.deepEqual(resolveProviderEnvironment({ targetRepository: "owner/target", environments }), environments[0]);
 });
 
-test("persisted environment id is only accepted when live repository mapping still matches", () => {
+test("persisted environment id is only decisive when its live repository mapping still matches", () => {
   assert.deepEqual(resolveProviderEnvironment({
     targetRepository: "owner/target",
     environments: [
@@ -26,11 +26,13 @@ test("persisted environment id is only accepted when live repository mapping sti
     preferredEnvironmentId: "env-b",
   }), { id: "env-b", label: "B", repository: "owner/target" });
 
-  assert.throws(() => resolveProviderEnvironment({
+  // A stale persisted id is only a hint. If live discovery now exposes exactly
+  // one environment for the target repository, that unique live mapping wins.
+  assert.deepEqual(resolveProviderEnvironment({
     targetRepository: "owner/target",
     environments,
     preferredEnvironmentId: "env-other",
-  }), (error) => error.code === "provider_context_unresolved" && /no provider environment/.test(error.message));
+  }), environments[0]);
 });
 
 test("zero or multiple live repository mappings fail closed", () => {
