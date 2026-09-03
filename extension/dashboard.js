@@ -38,10 +38,16 @@ $("open-github").addEventListener("click", async () => {
 });
 
 $("capture").addEventListener("click", run(async () => {
+  // A capture attempt invalidates any older prompt immediately. If the provider
+  // or parser rejects the new response, stale prompt text must not remain
+  // visible or available for submission as though the capture succeeded.
+  $("prompt").value = "";
+  await persist();
+
   const result = await send({ type: "crossdock.capturePrompt" });
   $("prompt").value = result.prompt;
   await persist();
-  setStatus("Captured the latest ChatGPT assistant response.");
+  setStatus("Captured Crossdock handoff prompt.");
 }));
 
 $("submit").addEventListener("click", run(async () => {
@@ -290,7 +296,6 @@ async function finalizeUpdate() {
 async function finishUpdateAfterRemoteChange() {
   requireTaskState("update");
   if (taskState.phase !== "branch-update-clicked") return;
-
   const changed = await waitForPrHeadChange({
     repository: taskState.repository,
     prNumber: taskState.pull_request,
@@ -520,12 +525,12 @@ async function restore() {
     assertPromptAvailableForRecovery(taskState);
     assertReportAvailableForRecovery(taskState);
   } catch (error) {
-    setStatus(error.message, true);
+    setStatus(`Cannot recover active task: ${error.message}`, true);
     return;
   }
 
   setStatus(`Recovered active ${taskState.mode} task in phase ${taskState.phase}.`);
-  if (taskState.phase !== "ready" || taskState.handoff_mode === "automatic") void monitorTask();
+  if (["running", "pr-create-uncertain", "pr-created", "branch-update-clicked"].includes(taskState.phase)) void monitorTask();
 }
 
 function sleep(ms) {
