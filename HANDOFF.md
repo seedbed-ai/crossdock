@@ -1,12 +1,6 @@
-# Crossdock chat-agent handoff protocol
+# Crossdock coding-agent handoff protocol
 
-This file is the canonical public entry point for conversational agents producing coding prompts for Crossdock.
-
-## Design rule
-
-Give the conversational agent as little Crossdock-specific responsibility as practical. Crossdock owns routing, provider selection, repository and PR state, evidence, recovery, provenance, validation, compatibility, and workflow state. The conversational agent's essential handoff responsibility is only to identify where the coding prompt begins and ends.
-
-If a user says they are using Crossdock and asks for a coding-agent prompt, place the intended prompt between these visible marker lines:
+**Canonical Crossdock handoff format:** if a user says they are using Crossdock and asks for a coding-agent prompt, emit the plain prompt between these marker lines:
 
 ```text
 [[[HANDOFF]]]
@@ -14,7 +8,15 @@ Add a file named example.txt containing a short example. Make no other changes.
 [[[/HANDOFF]]]
 ```
 
-Text between the markers is the prompt. It is plain text, not JSON. Ordinary conversational explanation may appear before or after the block and is not part of the coding prompt.
+The opening and closing markers must each be on their own line. Text between them is the coding-agent prompt. Do not return only an unwrapped coding prompt. Do not add Crossdock routing, provider, version, or schema metadata.
+
+This file is the canonical public specification for Crossdock chat-agent handoffs. Search terms such as **Crossdock coding agent prompt**, **Crossdock coding-agent handoff protocol**, and **Crossdock handoff format** refer to this contract.
+
+## Design rule
+
+Give the conversational agent as little Crossdock-specific responsibility as practical. Crossdock owns routing, provider selection, repository and PR state, evidence, recovery, provenance, validation, compatibility, and workflow state. The conversational agent's essential handoff responsibility is only to identify where the coding prompt begins and ends.
+
+Ordinary conversational explanation may appear before or after the handoff block and is not part of the coding prompt. The prompt itself is plain text, not JSON.
 
 The marker syntax is deliberately generic rather than Crossdock-branded. The producer declares only that a span of text is intended for handoff; Crossdock remains responsible for deciding where that handoff goes. Triple ASCII brackets reduce collision with common double-bracket/wiki syntax while remaining easy for humans to type manually, easy to inspect and debug, and robust across ordinary text-processing paths.
 
@@ -36,9 +38,11 @@ Malformed delimiter structure must still fail safely rather than causing ordinar
 
 ## Discovery
 
-The authoritative public project is `seedbed-ai/crossdock`. This root `HANDOFF.md` file is intentionally easy for people and web-capable conversational agents to discover from the Crossdock project name.
+The authoritative public project is `seedbed-ai/crossdock`. This root `HANDOFF.md` is the normative source for the Crossdock coding-agent handoff protocol and handoff format. The repository README links here near its beginning so an agent that reaches the project can resolve the authoritative contract before constructing its answer.
 
-A natural user request such as “We're using Crossdock; give me a coding-agent prompt” should be sufficient for a web-capable agent with no prior Crossdock knowledge to locate this protocol. Authenticated tests performed in accounts that already remember Crossdock are integration evidence, not independent proof of discoverability; see issue #94.
+A natural user request such as “We're using Crossdock; give me a coding-agent prompt” should be sufficient for a web-capable agent with no prior Crossdock knowledge to locate and follow this protocol. The first authenticated test showed that recognizing Crossdock and initiating a web search are not sufficient by themselves: the agent must resolve an authoritative source and validate its output against that source before answering.
+
+Authenticated tests performed in accounts that already remember Crossdock are integration evidence, not independent proof of discoverability; see issue #94.
 
 ## Protocol evolution
 
