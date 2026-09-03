@@ -125,20 +125,29 @@ async function waitForPrUrl({ tabId, targetRepository, discovery }) {
 }
 
 async function findNewPrEvidence({ tabId, targetRepository, discovery }) {
-  const before = discoveryBaseline(discovery, targetRepository);
-  const current = await snapshotPrEvidence(tabId);
-  return classifyNewPrUrls({ before, current, targetRepository });
+  const baseline = discoveryBaseline(discovery, targetRepository);
+  let current = await snapshotPrEvidence(tabId);
+  if (!baseline.crossRepositorySafe) {
+    current = current.filter((url) => repositoryFromGitHubPrUrl(url) === targetRepository);
+  }
+  return classifyNewPrUrls({ before: baseline.before, current, targetRepository });
 }
 
 function discoveryBaseline(discovery, targetRepository) {
-  if (discovery && Array.isArray(discovery.beforePrUrls)) return discovery.beforePrUrls;
+  if (discovery && Array.isArray(discovery.beforePrUrls)) {
+    return { before: discovery.beforePrUrls, crossRepositorySafe: true };
+  }
 
   // Compatibility for task states written before broad PR evidence capture. The
   // older baseline only knew about target-repository PRs, so it cannot safely
-  // prove that a currently visible wrong-repository PR is new. Preserve target
-  // recovery without manufacturing cross-repository evidence for old tasks.
+  // prove that a currently visible wrong-repository PR is new. Restrict current
+  // evidence to the target repository for these old tasks rather than creating
+  // a false integrity failure from unrelated pre-existing PR tabs.
   if (discovery && Array.isArray(discovery.beforeTabs) && Array.isArray(discovery.beforePage)) {
-    return [...new Set([...discovery.beforeTabs, ...discovery.beforePage].map((url) => canonicalPrUrl(url, targetRepository)))];
+    return {
+      before: [...new Set([...discovery.beforeTabs, ...discovery.beforePage].map((url) => canonicalPrUrl(url, targetRepository)))],
+      crossRepositorySafe: false,
+    };
   }
   throw new Error("created PR recovery baseline is missing");
 }
