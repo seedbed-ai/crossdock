@@ -9,20 +9,22 @@ Give the conversational agent as little Crossdock-specific responsibility as pra
 If a user says they are using Crossdock and asks for a coding-agent prompt, place the intended prompt between these visible marker lines:
 
 ```text
-⟦CROSSDOCK⟧
+[[[HANDOFF]]]
 Add a file named example.txt containing a short example. Make no other changes.
-⟦/CROSSDOCK⟧
+[[[/HANDOFF]]]
 ```
 
 Text between the markers is the prompt. It is plain text, not JSON. Ordinary conversational explanation may appear before or after the block and is not part of the coding prompt.
 
+The marker syntax is deliberately generic rather than Crossdock-branded. The producer declares only that a span of text is intended for handoff; Crossdock remains responsible for deciding where that handoff goes. Triple ASCII brackets reduce collision with common double-bracket/wiki syntax while remaining easy for humans to type manually, easy to inspect and debug, and robust across ordinary text-processing paths.
+
 Do not put credentials, tokens, cookies, secrets, hidden authentication data, Crossdock routing metadata, schema versions, provider names, or Crossdock configuration into the block unless such text is genuinely part of the coding instruction requested by the user.
 
-## Why visible delimiters
+## Why visible ASCII delimiters
 
 The delimiters exist only to locate prompt text inside a freeform conversational response. Visible markers are intentionally preferred over invisible or rare whitespace/control characters because browser rendering, DOM text extraction, Markdown, copy/paste, Unicode normalization, accessibility tools, and model output can normalize or remove invisible characters without a diagnosable visual indication.
 
-The markers should remain small and semantically minimal. Crossdock should not require structured metadata merely because metadata would make its parser easier to implement.
+ASCII is preferred over uncommon Unicode punctuation because manual human-authored handoffs should remain possible in unusual or recovery situations without requiring special-character input. The markers should remain small and semantically minimal. Crossdock should not require structured metadata merely because metadata would make its parser easier to implement.
 
 ## Current implementation limits
 
