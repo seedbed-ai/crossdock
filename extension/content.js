@@ -8,7 +8,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 async function handleMessage(message) {
   switch (message.type) {
     case "crossdock.capturePrompt": return { assistantResponse: captureLatestAssistantResponse(), url: location.href };
-    case "crossdock.submitCodex": return submitCodexPrompt(message.prompt);
+    case "crossdock.submitCodex": return submitCodexPrompt(message.prompt, message.targetRepository);
     case "crossdock.inspectCodex": return inspectCodexTask();
     case "crossdock.findPrUrls": return { prUrls: findPullRequestLinks(message.targetRepository) };
     case "crossdock.prepareCreatePr": return prepareCreatePr(message.captureReport !== false);
@@ -24,9 +24,10 @@ function captureLatestAssistantResponse() {
   return nodes.at(-1);
 }
 
-async function submitCodexPrompt(prompt) {
+async function submitCodexPrompt(prompt, targetRepository) {
   requireCodexPage();
   if (typeof prompt !== "string" || !prompt.trim()) throw new Error("Codex prompt is empty");
+  assertCodexRepositoryContext(targetRepository);
 
   const input = findCodexPromptInput(true);
   setEditableValue(input, prompt);
@@ -36,6 +37,43 @@ async function submitCodexPrompt(prompt) {
 
   const taskUrl = await waitForCodexSubmission({ beforeUrl, prompt });
   return { taskUrl };
+}
+
+function assertCodexRepositoryContext(targetRepository) {
+  if (typeof targetRepository !== "string" || !/^[^/\s]+\/[^/\s]+$/.test(targetRepository)) {
+    throw new Error("target repository must be owner/repo");
+  }
+
+  const expectedShort = targetRepository.split("/")[1];
+  const semanticSelectors = [
+    '[data-testid*="repository"]',
+    '[data-testid*="environment"]',
+    'button[aria-label*="repository" i]',
+    '[role="button"][aria-label*="repository" i]',
+    'button[aria-label*="environment" i]',
+    '[role="button"][aria-label*="environment" i]',
+  ];
+  const semantic = [...new Set(semanticSelectors.flatMap((selector) => [...document.querySelectorAll(selector)]))]
+    .filter(isVisible)
+    .map((node) => accessibleText(node))
+    .filter(Boolean);
+
+  const exactSemantic = semantic.filter((text) => text === targetRepository || text === expectedShort || text.endsWith(`/${expectedShort}`));
+  if (exactSemantic.length === 1) return;
+  if (exactSemantic.length > 1) throw new Error(`Codex repository context is ambiguous for target ${targetRepository}; found ${exactSemantic.length} matching semantic controls`);
+
+  const input = findCodexPromptInput(true);
+  const scope = input.closest("form") ?? input.parentElement?.parentElement?.parentElement ?? document;
+  const visibleLabels = [...new Set([...scope.querySelectorAll('button, [role="button"]')]
+    .filter(isVisible)
+    .map((node) => accessibleText(node))
+    .filter(Boolean))];
+  const exactLabels = visibleLabels.filter((text) => text === targetRepository || text === expectedShort || text.endsWith(`/${expectedShort}`));
+  if (exactLabels.length === 1) return;
+  if (exactLabels.length > 1) throw new Error(`Codex repository context is ambiguous for target ${targetRepository}; found ${exactLabels.length} matching composer controls`);
+
+  const context = [...new Set([...semantic, ...visibleLabels])].slice(0, 12).join(", ") || "none";
+  throw new Error(`Codex repository context does not match target ${targetRepository}; visible provider context: ${context}`);
 }
 
 async function waitForCodexSubmission({ beforeUrl, prompt }) {
