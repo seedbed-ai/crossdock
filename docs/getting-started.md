@@ -51,14 +51,20 @@ When a task starts, Crossdock freezes the selected service URL into the active t
 The public implementation can:
 
 - deterministically render immutable task records with independently configurable prompt/report evidence (`full`, `hash`, or `omit`);
-- reject several known secret-like patterns before GitHub-backed plaintext persistence;
-- create and verify initial PR/update-comment provenance;
+- independently control browser crash-recovery persistence for prompt and provider-report content (`persist` or `memory`) and freeze those choices per active task;
+- reject several known secret-like patterns before GitHub-backed plaintext persistence or committed-file publication;
+- independently publish PR-body/update-comment provenance as `link` or `none` while durable task-record storage remains separate;
+- publish optional committed-file provenance as `link` or `reference` to an explicitly selected GitHub repository, branch, and task-ID-based path, using create-or-identical/no-overwrite verification;
 - use an explicitly configured GitHub task-record repository;
 - recover exact immutable task records and update comments idempotently after retries;
+- show privacy-safe active-task operational state without displaying prompt/report evidence;
+- validate and freeze the current browser work intent before provider delegation, failing closed for unsupported or tampered intent values;
 - expose a configurable loopback handoff service with browser-origin restrictions; and
-- run an experimental Chromium Manifest V3 adapter/dashboard for ChatGPT → Codex Cloud → GitHub workflows.
+- run an experimental Chromium Manifest V3 adapter/dashboard for ChatGPT → Codex Cloud → GitHub implementation workflows.
 
-The provider adapter intentionally fails closed on ambiguous tabs, controls, repositories, PRs, and recovery states.
+The current Codex browser adapter advertises only **Implementation — experimental**. Provider-neutral review request/result contracts exist in the core, but browser review execution is not enabled or claimed as compatible yet.
+
+The provider adapter intentionally fails closed on ambiguous tabs, controls, repositories, PRs, unsupported work intents, and recovery states.
 
 ## Live testing
 
@@ -68,4 +74,4 @@ Syntax/unit/HTTP-boundary CI does not establish authenticated provider compatibi
 
 ## What does not exist yet
 
-Crossdock does not yet provide a packaged supported desktop application, a mobile implementation, an end-user credential/setup flow, a finalized pluggable storage UI, or a supported compatibility guarantee for the live browser adapter. Those items are tracked publicly rather than implied by the experimental implementation.
+Crossdock does not yet provide a packaged supported desktop application, a mobile implementation, an end-user credential/setup flow, a finalized pluggable storage UI, PR-body/comment `summary` publication, first-class browser code-review execution, or a supported compatibility guarantee for the live browser adapter. Those items are tracked publicly rather than implied by the experimental implementation.
