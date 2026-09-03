@@ -30,6 +30,11 @@ export class GitHubClient {
     return payload;
   }
 
+  getRepository(repository) {
+    const [owner, repo] = repository.split("/");
+    return this.request("GET", `/repos/${owner}/${repo}`);
+  }
+
   createFile(repository, path, content, message, branch) {
     const [owner, repo] = repository.split("/");
     return this.request("PUT", `/repos/${owner}/${repo}/contents/${encodePath(path)}`, {
