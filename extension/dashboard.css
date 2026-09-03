@@ -8,9 +8,10 @@ button:hover { background: color-mix(in srgb, Canvas 82%, CanvasText 18%); }
 button:disabled { opacity: .55; cursor: wait; }
 button.primary { font-weight: 700; }
 input, textarea, select { width: 100%; padding: .72rem .8rem; background: Canvas; color: CanvasText; }
-button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
 textarea { resize: vertical; }
 label { display: grid; gap: .45rem; font-weight: 650; }
+a { color: inherit; text-underline-offset: .16em; }
 .shell { width: min(1080px, 100%); margin: 0 auto; padding: clamp(1rem, 3vw, 2rem); display: grid; gap: 1.25rem; }
 .hero { display: flex; gap: 1rem; align-items: end; justify-content: space-between; }
 h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.5rem); letter-spacing: -.045em; }
@@ -29,6 +30,9 @@ h2 { margin: 0; font-size: 1.15rem; }
 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; padding: 1rem; border: 1px solid color-mix(in srgb, CanvasText 16%, transparent); border-radius: 18px; }
 .wide { grid-column: 1 / -1; }
 .prompt { display: grid; gap: .5rem; }
+.site-footer { margin-top: .75rem; padding-top: 1rem; border-top: 1px solid color-mix(in srgb, CanvasText 14%, transparent); font-size: .82rem; line-height: 1.5; opacity: .72; }
+.site-footer p { margin: 0; }
+.site-footer p + p { margin-top: .2rem; }
 @media (max-width: 700px) { .shell { padding: 1rem; } .hero { align-items: start; flex-direction: column; } #status { width: 100%; } .task-state dl { grid-template-columns: 1fr 1fr; } .grid { grid-template-columns: 1fr; } .wide { grid-column: auto; } .surfaces, .actions { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 430px) { .task-state dl, .surfaces, .actions { grid-template-columns: 1fr; } button, input, select { min-height: 48px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
