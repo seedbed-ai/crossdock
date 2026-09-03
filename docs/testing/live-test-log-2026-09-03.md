@@ -50,15 +50,17 @@ The producer should not be made responsible for Crossdock-owned concerns merely 
 - an `agent`/provider field violates routing separation of concerns when Crossdock owns destination selection;
 - JSON encoding adds visible conversational intrusion and escaping/formatting burden when the payload is fundamentally plain prompt text.
 
-The replacement direction is therefore a minimal visible delimiter contract:
+The replacement contract is therefore a minimal generic visible delimiter pair:
 
 ```text
-⟦CROSSDOCK⟧
+[[[HANDOFF]]]
 plain coding-agent prompt text
-⟦/CROSSDOCK⟧
+[[[/HANDOFF]]]
 ```
 
-Visible delimiters are preferred to invisible whitespace/control characters because invisible characters may be normalized or removed by rendering, DOM extraction, Markdown, copy/paste, Unicode processing, accessibility tools, or model output without leaving a diagnosable visual indication.
+The markers are deliberately not branded as Crossdock. The producer only declares a handoff boundary; Crossdock owns the downstream interpretation and routing. Triple brackets are preferred to common double-bracket/wiki syntax to reduce accidental collisions.
+
+Visible delimiters are preferred to invisible whitespace/control characters because invisible characters may be normalized or removed by rendering, DOM extraction, Markdown, copy/paste, Unicode processing, accessibility tools, or model output without leaving a diagnosable visual indication. ASCII is preferred to uncommon Unicode punctuation so that a human can type a manual handoff in unusual or recovery situations without special-character input.
 
 See #92 for the general producer-responsibility principle.
 
