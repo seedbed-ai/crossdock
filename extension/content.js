@@ -170,6 +170,9 @@ async function waitForCodexSubmission({ beforeUrl, prompt }) {
     const composerNoLongerContainsPrompt = !currentInput || currentValue !== prompt;
     const submitStillAvailable = Boolean(findCodexSubmitButton(false));
 
+    // Codex may transition in place before assigning a task URL. Require both
+    // the submitted prompt to leave the composer and the submit/start control
+    // to disappear before claiming that submission succeeded.
     if (composerNoLongerContainsPrompt && !submitStillAvailable) return location.href;
 
     await sleep(100);
@@ -207,7 +210,7 @@ function findCodexSubmitButton(required = true) {
     .filter(isEnabled)
     .filter((node) => normalizedLabels.has(accessibleText(node).toLowerCase()));
 
-  if (buttons.length > 1) throw new Error(`Codex submit control is ambiguous; found ${buttons.length} semantic candidates`);
+  if (buttons.length > 1) throw new Error(`Codex submit control is ambiguous; found ${buttons.length} label candidates`);
   if (required && buttons.length !== 1) throw new Error(`required Codex submit control not found; expected one of: ${labels.join(", ")}`);
   return buttons[0] ?? null;
 }
@@ -282,6 +285,10 @@ function sliceCodexReportText(text) {
   const testingIndex = lines.findIndex((line, index) => index > summaryIndex && line === "Testing");
   if (testingIndex < 0) return null;
 
+  // The current Codex task UI renders the completion report as a structured
+  // Summary/Testing block without the old report-specific data-testid. Anchor
+  // on those visible semantic headings and take the smallest ancestor that
+  // contains both, then discard any prompt/task chrome that precedes Summary.
   const reportLines = lines.slice(summaryIndex);
   if (reportLines.length < 4) return null;
   return reportLines.join("\n");
