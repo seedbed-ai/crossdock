@@ -63,8 +63,10 @@ async function ensureCodexRepositoryContext(targetRepository) {
   }
 
   candidates[0].click();
-  await waitFor(() => visibleText(selector) === targetRepository && selector.getAttribute("aria-expanded") !== "true", 5_000,
-    `Codex repository selection was not confirmed for target ${targetRepository}`);
+  await waitFor(() => {
+    const currentSelector = findUniqueSemanticButton("View all code environments");
+    return visibleText(currentSelector) === targetRepository && currentSelector.getAttribute("aria-expanded") !== "true";
+  }, 5_000, `Codex repository selection was not confirmed for target ${targetRepository}`);
   assertCodexRepositoryContext(targetRepository);
 }
 
@@ -89,8 +91,10 @@ async function ensureCodexBranchContext(targetBranch) {
   }
 
   candidates[0].click();
-  await waitFor(() => visibleText(selector) === expected && selector.getAttribute("aria-expanded") !== "true", 5_000,
-    `Codex branch selection was not confirmed for target ${expected}`);
+  await waitFor(() => {
+    const currentSelector = findUniqueSemanticButton("Search for your branch");
+    return visibleText(currentSelector) === expected && currentSelector.getAttribute("aria-expanded") !== "true";
+  }, 5_000, `Codex branch selection was not confirmed for target ${expected}`);
   assertCodexBranchContext(expected);
 }
 

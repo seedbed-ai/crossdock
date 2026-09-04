@@ -36,6 +36,17 @@ test("repository selection uses authenticated Codex semantic controls and exact 
   assert.match(contentSource, /exact repository choices/);
 });
 
+test("repository confirmation re-resolves the live semantic selector after selection", () => {
+  const start = contentSource.indexOf("async function ensureCodexRepositoryContext");
+  const end = contentSource.indexOf("async function ensureCodexBranchContext");
+  const repositorySelection = contentSource.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(repositorySelection, /candidates\[0\]\.click\(\);[\s\S]*await waitFor\(\(\) => \{[\s\S]*const currentSelector = findUniqueSemanticButton\("View all code environments"\)/);
+  assert.match(repositorySelection, /visibleText\(currentSelector\) === targetRepository/);
+  assert.match(repositorySelection, /currentSelector\.getAttribute\("aria-expanded"\) !== "true"/);
+  assert.doesNotMatch(repositorySelection, /await waitFor\(\(\) => visibleText\(selector\) === targetRepository/);
+});
+
 test("branch selection uses authenticated Codex semantic controls and exact branch text", () => {
   assert.match(contentSource, /Search for your branch/);
   assert.match(contentSource, /ensureCodexBranchContext/);
@@ -43,6 +54,17 @@ test("branch selection uses authenticated Codex semantic controls and exact bran
   assert.match(contentSource, /branch is not visible in the branch chooser/);
   assert.match(contentSource, /Codex branch selection was not confirmed/);
   assert.match(contentSource, /selected provider branch/);
+});
+
+test("branch confirmation re-resolves the live semantic selector after selection", () => {
+  const start = contentSource.indexOf("async function ensureCodexBranchContext");
+  const end = contentSource.indexOf("function assertCodexRepositoryContext");
+  const branchSelection = contentSource.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(branchSelection, /candidates\[0\]\.click\(\);[\s\S]*await waitFor\(\(\) => \{[\s\S]*const currentSelector = findUniqueSemanticButton\("Search for your branch"\)/);
+  assert.match(branchSelection, /visibleText\(currentSelector\) === expected/);
+  assert.match(branchSelection, /currentSelector\.getAttribute\("aria-expanded"\) !== "true"/);
+  assert.doesNotMatch(branchSelection, /await waitFor\(\(\) => visibleText\(selector\) === expected/);
 });
 
 test("provider context is returned with exact repository and frozen base branch", () => {
