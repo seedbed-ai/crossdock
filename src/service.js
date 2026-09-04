@@ -59,7 +59,7 @@ function summarizeInitial(result) {
 function summarizeUpdate(result) {
   return {
     comment_id: result.comment?.id ?? null,
-    comment_url: result.comment?.html_url ?? result.comment.url ?? null,
+    comment_url: result.comment?.html_url ?? result.comment?.url ?? null,
     task_record_url: result.taskRecord.url,
     publication: result.publication,
   };
