@@ -8,7 +8,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 async function handleMessage(message) {
   switch (message.type) {
     case "crossdock.capturePrompt": return { assistantResponse: captureLatestAssistantResponse(), url: location.href };
-    case "crossdock.submitCodex": return submitCodexPrompt(message.prompt, message.targetRepository);
+    case "crossdock.submitCodex": return submitCodexPrompt(message.prompt, message.targetRepository, message.targetBranch);
     case "crossdock.inspectCodex": return inspectCodexTask();
     case "crossdock.findPrUrls": return { prUrls: findPullRequestLinks(message.targetRepository) };
     case "crossdock.prepareCreatePr": return prepareCreatePr(message.captureReport !== false);
@@ -24,10 +24,11 @@ function captureLatestAssistantResponse() {
   return nodes.at(-1);
 }
 
-async function submitCodexPrompt(prompt, targetRepository) {
+async function submitCodexPrompt(prompt, targetRepository, targetBranch) {
   requireCodexPage();
   if (typeof prompt !== "string" || !prompt.trim()) throw new Error("Codex prompt is empty");
   await ensureCodexRepositoryContext(targetRepository);
+  await ensureCodexBranchContext(targetBranch);
 
   const input = findCodexPromptInput(true);
   setEditableValue(input, prompt);
@@ -36,7 +37,7 @@ async function submitCodexPrompt(prompt, targetRepository) {
   findCodexSubmitButton(true).click();
 
   const taskUrl = await waitForCodexSubmission({ beforeUrl, prompt });
-  return { taskUrl };
+  return { taskUrl, providerContext: { repository: targetRepository, base_branch: targetBranch } };
 }
 
 async function ensureCodexRepositoryContext(targetRepository) {
@@ -51,11 +52,8 @@ async function ensureCodexRepositoryContext(targetRepository) {
   }
 
   selector.click();
-  const dialog = await waitForControlledDialog(selector, 5_000);
-  const candidates = [...dialog.querySelectorAll('button, [role="button"]')]
-    .filter(isVisible)
-    .filter(isEnabled)
-    .filter((node) => visibleText(node) === targetRepository);
+  const dialog = await waitForControlledDialog(selector, 5_000, "Codex environment chooser did not open");
+  const candidates = exactVisibleButtonChoices(dialog, targetRepository);
 
   if (candidates.length === 0) {
     throw new Error(`Codex repository context is unresolved for target ${targetRepository}; repository is not visible in the environment chooser`);
@@ -70,6 +68,32 @@ async function ensureCodexRepositoryContext(targetRepository) {
   assertCodexRepositoryContext(targetRepository);
 }
 
+async function ensureCodexBranchContext(targetBranch) {
+  if (typeof targetBranch !== "string" || !targetBranch.trim()) throw new Error("target branch is required before Codex submission");
+  const expected = targetBranch.trim();
+  const selector = findUniqueSemanticButton("Search for your branch");
+  if (visibleText(selector) === expected) {
+    assertCodexBranchContext(expected);
+    return;
+  }
+
+  selector.click();
+  const dialog = await waitForControlledDialog(selector, 5_000, "Codex branch chooser did not open");
+  const candidates = exactVisibleButtonChoices(dialog, expected);
+
+  if (candidates.length === 0) {
+    throw new Error(`Codex branch context is unresolved for target ${expected}; branch is not visible in the branch chooser`);
+  }
+  if (candidates.length > 1) {
+    throw new Error(`Codex branch context is ambiguous for target ${expected}; found ${candidates.length} exact branch choices`);
+  }
+
+  candidates[0].click();
+  await waitFor(() => visibleText(selector) === expected && selector.getAttribute("aria-expanded") !== "true", 5_000,
+    `Codex branch selection was not confirmed for target ${expected}`);
+  assertCodexBranchContext(expected);
+}
+
 function assertCodexRepositoryContext(targetRepository) {
   if (typeof targetRepository !== "string" || !/^[^/\s]+\/[^/\s]+$/.test(targetRepository)) {
     throw new Error("target repository must be owner/repo");
@@ -82,6 +106,20 @@ function assertCodexRepositoryContext(targetRepository) {
   throw new Error(`Codex repository context does not match target ${targetRepository}; selected provider context: ${selectedRepository || "none"}`);
 }
 
+function assertCodexBranchContext(targetBranch) {
+  const branchButton = findUniqueSemanticButton("Search for your branch");
+  const selectedBranch = visibleText(branchButton);
+  if (selectedBranch === targetBranch) return;
+  throw new Error(`Codex branch context does not match target ${targetBranch}; selected provider branch: ${selectedBranch || "none"}`);
+}
+
+function exactVisibleButtonChoices(scope, expectedText) {
+  return [...scope.querySelectorAll('button, [role="button"]')]
+    .filter(isVisible)
+    .filter(isEnabled)
+    .filter((node) => visibleText(node) === expectedText);
+}
+
 function findUniqueSemanticButton(ariaLabel) {
   const buttons = [...document.querySelectorAll(`button[aria-label="${ariaLabel}"], [role="button"][aria-label="${ariaLabel}"]`)]
     .filter(isVisible)
@@ -90,7 +128,7 @@ function findUniqueSemanticButton(ariaLabel) {
   return buttons[0];
 }
 
-async function waitForControlledDialog(button, timeoutMs) {
+async function waitForControlledDialog(button, timeoutMs, message) {
   return waitForResult(() => {
     const controls = button.getAttribute("aria-controls");
     if (controls) {
@@ -99,9 +137,9 @@ async function waitForControlledDialog(button, timeoutMs) {
     }
     const dialogs = [...document.querySelectorAll('[role="dialog"]')].filter(isVisible);
     if (dialogs.length === 1) return dialogs[0];
-    if (dialogs.length > 1) throw new Error(`Codex environment chooser is ambiguous; found ${dialogs.length} visible dialogs`);
+    if (dialogs.length > 1) throw new Error(`Codex chooser is ambiguous; found ${dialogs.length} visible dialogs`);
     return null;
-  }, timeoutMs, "Codex environment chooser did not open");
+  }, timeoutMs, message);
 }
 
 async function waitFor(predicate, timeoutMs, message) {
