@@ -11,18 +11,25 @@ test("background passes configured target repository into Codex submission", () 
   assert.match(backgroundSource, /crossdock\.submitCodex[\s\S]*targetRepository/);
 });
 
-test("Codex submission validates repository context before writing or clicking", () => {
+test("Codex submission resolves repository context before writing or clicking", () => {
   const start = contentSource.indexOf("async function submitCodexPrompt");
-  const end = contentSource.indexOf("async function waitForCodexSubmission");
+  const end = contentSource.indexOf("async function ensureCodexRepositoryContext");
   const submit = contentSource.slice(start, end);
   assert.ok(start >= 0 && end > start);
-  assert.ok(submit.indexOf("assertCodexRepositoryContext(targetRepository)") < submit.indexOf("setEditableValue(input, prompt)"));
-  assert.ok(submit.indexOf("assertCodexRepositoryContext(targetRepository)") < submit.indexOf("findCodexSubmitButton(true).click()"));
+  assert.ok(submit.indexOf("await ensureCodexRepositoryContext(targetRepository)") < submit.indexOf("setEditableValue(input, prompt)"));
+  assert.ok(submit.indexOf("await ensureCodexRepositoryContext(targetRepository)") < submit.indexOf("findCodexSubmitButton(true).click()"));
 });
 
-test("repository context mismatch and ambiguity fail closed", () => {
-  assert.match(contentSource, /Codex repository context does not match target/);
-  assert.match(contentSource, /Codex repository context is ambiguous/);
-  assert.match(contentSource, /data-testid\*=\\?"repository\\?"/);
-  assert.match(contentSource, /aria-label\*=\\?"repository\\?" i/);
+test("repository selection uses authenticated Codex semantic controls and exact repository text", () => {
+  assert.match(contentSource, /View all code environments/);
+  assert.match(contentSource, /waitForControlledDialog/);
+  assert.match(contentSource, /visibleText\(node\) === targetRepository/);
+  assert.match(contentSource, /repository is not visible in the environment chooser/);
+  assert.match(contentSource, /found \$\{candidates\.length\} exact repository choices/);
+});
+
+test("repository selection is confirmed before the old fail-closed assertion returns", () => {
+  assert.match(contentSource, /visibleText\(selector\) === targetRepository/);
+  assert.match(contentSource, /Codex repository selection was not confirmed/);
+  assert.match(contentSource, /selected provider context/);
 });
