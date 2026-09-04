@@ -5,6 +5,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
+const CODEX_CONTEXT_SELECTION_TIMEOUT_MS = 20_000;
+
 async function handleMessage(message) {
   switch (message.type) {
     case "crossdock.capturePrompt": return { assistantResponse: captureLatestAssistantResponse(), url: location.href };
@@ -66,7 +68,7 @@ async function ensureCodexRepositoryContext(targetRepository) {
   await waitFor(() => {
     const currentSelector = findUniqueSemanticButton("View all code environments");
     return visibleText(currentSelector) === targetRepository && currentSelector.getAttribute("aria-expanded") !== "true";
-  }, 5_000, `Codex repository selection was not confirmed for target ${targetRepository}`);
+  }, CODEX_CONTEXT_SELECTION_TIMEOUT_MS, `Codex repository selection was not confirmed for target ${targetRepository}`);
   assertCodexRepositoryContext(targetRepository);
 }
 
@@ -94,7 +96,7 @@ async function ensureCodexBranchContext(targetBranch) {
   await waitFor(() => {
     const currentSelector = findUniqueSemanticButton("Search for your branch");
     return visibleText(currentSelector) === expected && currentSelector.getAttribute("aria-expanded") !== "true";
-  }, 5_000, `Codex branch selection was not confirmed for target ${expected}`);
+  }, CODEX_CONTEXT_SELECTION_TIMEOUT_MS, `Codex branch selection was not confirmed for target ${expected}`);
   assertCodexBranchContext(expected);
 }
 
@@ -214,7 +216,7 @@ function findCodexSubmitButton(required = true) {
     .filter(isEnabled)
     .filter((node) => normalizedLabels.has(accessibleText(node).toLowerCase()));
 
-  if (buttons.length > 1) throw new Error(`Codex submit control is ambiguous; found ${buttons.length} label candidates`);
+  if (buttons.length > 1) throw new Error(`Codex submit control is ambiguous; found ${buttons.length} semantic candidates`);
   if (required && buttons.length !== 1) throw new Error(`required Codex submit control not found; expected one of: ${labels.join(", ")}`);
   return buttons[0] ?? null;
 }
