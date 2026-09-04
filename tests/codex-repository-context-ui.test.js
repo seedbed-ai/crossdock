@@ -47,6 +47,15 @@ test("repository confirmation re-resolves the live semantic selector after selec
   assert.doesNotMatch(repositorySelection, /await waitFor\(\(\) => visibleText\(selector\) === targetRepository/);
 });
 
+test("repository confirmation allows authenticated slow provider transitions to settle", () => {
+  const start = contentSource.indexOf("async function ensureCodexRepositoryContext");
+  const end = contentSource.indexOf("async function ensureCodexBranchContext");
+  const repositorySelection = contentSource.slice(start, end);
+  assert.match(contentSource, /const CODEX_CONTEXT_SELECTION_TIMEOUT_MS = 20_000;/);
+  assert.match(repositorySelection, /CODEX_CONTEXT_SELECTION_TIMEOUT_MS/);
+  assert.doesNotMatch(repositorySelection, /\}, 5_000, `Codex repository selection was not confirmed/);
+});
+
 test("branch selection uses authenticated Codex semantic controls and exact branch text", () => {
   assert.match(contentSource, /Search for your branch/);
   assert.match(contentSource, /ensureCodexBranchContext/);
@@ -65,6 +74,14 @@ test("branch confirmation re-resolves the live semantic selector after selection
   assert.match(branchSelection, /visibleText\(currentSelector\) === expected/);
   assert.match(branchSelection, /currentSelector\.getAttribute\("aria-expanded"\) !== "true"/);
   assert.doesNotMatch(branchSelection, /await waitFor\(\(\) => visibleText\(selector\) === expected/);
+});
+
+test("branch confirmation uses the same slow-transition timeout", () => {
+  const start = contentSource.indexOf("async function ensureCodexBranchContext");
+  const end = contentSource.indexOf("function assertCodexRepositoryContext");
+  const branchSelection = contentSource.slice(start, end);
+  assert.match(branchSelection, /CODEX_CONTEXT_SELECTION_TIMEOUT_MS/);
+  assert.doesNotMatch(branchSelection, /\}, 5_000, `Codex branch selection was not confirmed/);
 });
 
 test("provider context is returned with exact repository and frozen base branch", () => {
