@@ -1,5 +1,6 @@
 import { extractCrossdockHandoff } from "./chat-agent-handoff.js";
 import { canonicalGitHubPrUrl, classifyNewPrUrls, repositoryFromGitHubPrUrl } from "./pr-discovery.js";
+import { postServiceJson } from "./service-client.js";
 
 const CHATGPT_URL = "https://chatgpt.com/";
 const CODEX_URL = "https://chatgpt.com/codex/cloud";
@@ -28,10 +29,25 @@ async function handleMessage(message) {
       if (typeof targetRepository !== "string" || !/^[^/\s]+\/[^/\s]+$/.test(targetRepository)) {
         throw new Error("target repository must be configured as owner/repo before Codex submission");
       }
+      const serviceUrl = stored.dashboard?.["service-url"];
+      const snapshot = await postServiceJson({
+        path: "/repository/snapshot",
+        body: { target_repository: targetRepository },
+        preference: serviceUrl,
+      });
+      if (snapshot.repository !== targetRepository || typeof snapshot.default_branch !== "string" || !snapshot.default_branch.trim()) {
+        throw new Error("target repository snapshot did not return the configured repository and default branch");
+      }
+      const targetBranch = snapshot.default_branch.trim();
       const tab = await ensureCodexTab();
-      const result = await sendToTab(tab.id, { type: "crossdock.submitCodex", prompt: message.prompt, targetRepository });
+      const result = await sendToTab(tab.id, {
+        type: "crossdock.submitCodex",
+        prompt: message.prompt,
+        targetRepository,
+        targetBranch,
+      });
       await chrome.tabs.update(tab.id, { active: true });
-      return result;
+      return { ...result, providerContext: { repository: targetRepository, base_branch: targetBranch } };
     }
     case "crossdock.inspectCodex": {
       const tab = await findChatGptTab(true);
