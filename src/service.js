@@ -4,6 +4,14 @@ export async function dispatchHandoff({ method, path, body, github }) {
   if (method === "GET" && path === "/health") return { status: 200, body: { ok: true } };
   if (method !== "POST") return { status: 405, body: { error: "method_not_allowed" } };
 
+  if (path === "/repository/snapshot") {
+    requireObject(body, "body");
+    const repository = requireRepository(body.target_repository);
+    const remote = await github.getRepository(repository);
+    if (typeof remote?.default_branch !== "string" || !remote.default_branch.trim()) throw new Error("target repository is missing default-branch metadata");
+    return { status: 200, body: { repository, default_branch: remote.default_branch.trim() } };
+  }
+
   if (path === "/pr/snapshot") {
     requireObject(body, "body");
     const task = await hydrateTaskFromPullRequest(github, {
@@ -32,11 +40,11 @@ export async function dispatchHandoff({ method, path, body, github }) {
 }
 
 export async function hydrateTaskFromPullRequest(github, task) {
-  if (typeof task.target_repository !== "string" || !/^[^/]+\/[^/]+$/.test(task.target_repository)) throw new Error("target_repository is required in owner/repo form");
+  const repository = requireRepository(task.target_repository);
   if (!Number.isInteger(task.pull_request) || task.pull_request <= 0) throw new Error("pull_request is required");
-  const pr = await github.getPullRequest(task.target_repository, task.pull_request);
+  const pr = await github.getPullRequest(repository, task.pull_request);
   if (!pr?.base?.ref || !pr?.head?.ref || !pr?.head?.sha) throw new Error("target PR is missing base/head metadata");
-  return { ...task, base_branch: pr.base.ref, working_branch: pr.head.ref, result_commit: pr.head.sha };
+  return { ...task, target_repository: repository, base_branch: pr.base.ref, working_branch: pr.head.ref, result_commit: pr.head.sha };
 }
 
 function summarizeInitial(result) {
@@ -55,6 +63,11 @@ function summarizeUpdate(result) {
     task_record_url: result.taskRecord.url,
     publication: result.publication,
   };
+}
+
+function requireRepository(value) {
+  if (typeof value !== "string" || !/^[^/\s]+\/[^/\s]+$/.test(value.trim())) throw new Error("target_repository is required in owner/repo form");
+  return value.trim();
 }
 
 function requireObject(value, label) {

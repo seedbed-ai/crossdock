@@ -7,6 +7,10 @@ function githubMock() {
   let storedContent = "";
   return {
     calls: [],
+    async getRepository(repository) {
+      this.calls.push(["getRepository", repository]);
+      return { full_name: repository, default_branch: "main" };
+    },
     async getPullRequest(repository, number) {
       this.calls.push(["getPullRequest", repository, number]);
       return { number, body, html_url: `https://github.com/${repository}/pull/${number}`, base: { ref: "main" }, head: { ref: "crossdock/task", sha: "0123456789abcdef0123456789abcdef01234567" } };
@@ -38,6 +42,28 @@ const task = {
 
 const storage = { repository: "example/private-records", branch: "main" };
 const nonePublication = { change_description: "none", change_comment: "none", committed_file: null };
+
+test("repository snapshot returns canonical target and remote default branch", async () => {
+  const github = githubMock();
+  const result = await dispatchHandoff({
+    method: "POST",
+    path: "/repository/snapshot",
+    github,
+    body: { target_repository: " example/project " },
+  });
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { repository: "example/project", default_branch: "main" });
+  assert.deepEqual(github.calls[0], ["getRepository", "example/project"]);
+});
+
+test("repository snapshot fails closed without default-branch metadata", async () => {
+  const github = githubMock();
+  github.getRepository = async () => ({ full_name: "example/project", default_branch: "" });
+  await assert.rejects(
+    dispatchHandoff({ method: "POST", path: "/repository/snapshot", github, body: { target_repository: "example/project" } }),
+    /missing default-branch metadata/,
+  );
+});
 
 test("hydrateTaskFromPullRequest trusts remote PR refs and head SHA", async () => {
   const github = githubMock();
