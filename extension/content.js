@@ -27,7 +27,7 @@ function captureLatestAssistantResponse() {
 async function submitCodexPrompt(prompt, targetRepository) {
   requireCodexPage();
   if (typeof prompt !== "string" || !prompt.trim()) throw new Error("Codex prompt is empty");
-  assertCodexRepositoryContext(targetRepository);
+  await ensureCodexRepositoryContext(targetRepository);
 
   const input = findCodexPromptInput(true);
   setEditableValue(input, prompt);
@@ -39,41 +39,87 @@ async function submitCodexPrompt(prompt, targetRepository) {
   return { taskUrl };
 }
 
+async function ensureCodexRepositoryContext(targetRepository) {
+  if (typeof targetRepository !== "string" || !/^[^/\s]+\/[^/\s]+$/.test(targetRepository)) {
+    throw new Error("target repository must be owner/repo");
+  }
+
+  const selector = findUniqueSemanticButton("View all code environments");
+  if (visibleText(selector) === targetRepository) {
+    assertCodexRepositoryContext(targetRepository);
+    return;
+  }
+
+  selector.click();
+  const dialog = await waitForControlledDialog(selector, 5_000);
+  const candidates = [...dialog.querySelectorAll('button, [role="button"]')]
+    .filter(isVisible)
+    .filter(isEnabled)
+    .filter((node) => visibleText(node) === targetRepository);
+
+  if (candidates.length === 0) {
+    throw new Error(`Codex repository context is unresolved for target ${targetRepository}; repository is not visible in the environment chooser`);
+  }
+  if (candidates.length > 1) {
+    throw new Error(`Codex repository context is ambiguous for target ${targetRepository}; found ${candidates.length} exact repository choices`);
+  }
+
+  candidates[0].click();
+  await waitFor(() => visibleText(selector) === targetRepository && selector.getAttribute("aria-expanded") !== "true", 5_000,
+    `Codex repository selection was not confirmed for target ${targetRepository}`);
+  assertCodexRepositoryContext(targetRepository);
+}
+
 function assertCodexRepositoryContext(targetRepository) {
   if (typeof targetRepository !== "string" || !/^[^/\s]+\/[^/\s]+$/.test(targetRepository)) {
     throw new Error("target repository must be owner/repo");
   }
 
-  const expectedShort = targetRepository.split("/")[1];
-  const semanticSelectors = [
-    '[data-testid*="repository"]',
-    '[data-testid*="environment"]',
-    'button[aria-label*="repository" i]',
-    '[role="button"][aria-label*="repository" i]',
-    'button[aria-label*="environment" i]',
-    '[role="button"][aria-label*="environment" i]',
-  ];
-  const semantic = [...new Set(semanticSelectors.flatMap((selector) => [...document.querySelectorAll(selector)]))]
+  const environmentButton = findUniqueSemanticButton("View all code environments");
+  const selectedRepository = visibleText(environmentButton);
+  if (selectedRepository === targetRepository) return;
+
+  throw new Error(`Codex repository context does not match target ${targetRepository}; selected provider context: ${selectedRepository || "none"}`);
+}
+
+function findUniqueSemanticButton(ariaLabel) {
+  const buttons = [...document.querySelectorAll(`button[aria-label="${ariaLabel}"], [role="button"][aria-label="${ariaLabel}"]`)]
     .filter(isVisible)
-    .map((node) => accessibleText(node))
-    .filter(Boolean);
+    .filter(isEnabled);
+  if (buttons.length !== 1) throw new Error(`Codex semantic control must resolve to exactly one visible element for aria-label ${ariaLabel}; found ${buttons.length}`);
+  return buttons[0];
+}
 
-  const exactSemantic = semantic.filter((text) => text === targetRepository || text === expectedShort || text.endsWith(`/${expectedShort}`));
-  if (exactSemantic.length === 1) return;
-  if (exactSemantic.length > 1) throw new Error(`Codex repository context is ambiguous for target ${targetRepository}; found ${exactSemantic.length} matching semantic controls`);
+async function waitForControlledDialog(button, timeoutMs) {
+  return waitForResult(() => {
+    const controls = button.getAttribute("aria-controls");
+    if (controls) {
+      const controlled = document.getElementById(controls);
+      if (controlled && isVisible(controlled) && controlled.getAttribute("role") === "dialog") return controlled;
+    }
+    const dialogs = [...document.querySelectorAll('[role="dialog"]')].filter(isVisible);
+    if (dialogs.length === 1) return dialogs[0];
+    if (dialogs.length > 1) throw new Error(`Codex environment chooser is ambiguous; found ${dialogs.length} visible dialogs`);
+    return null;
+  }, timeoutMs, "Codex environment chooser did not open");
+}
 
-  const input = findCodexPromptInput(true);
-  const scope = input.closest("form") ?? input.parentElement?.parentElement?.parentElement ?? document;
-  const visibleLabels = [...new Set([...scope.querySelectorAll('button, [role="button"]')]
-    .filter(isVisible)
-    .map((node) => accessibleText(node))
-    .filter(Boolean))];
-  const exactLabels = visibleLabels.filter((text) => text === targetRepository || text === expectedShort || text.endsWith(`/${expectedShort}`));
-  if (exactLabels.length === 1) return;
-  if (exactLabels.length > 1) throw new Error(`Codex repository context is ambiguous for target ${targetRepository}; found ${exactLabels.length} matching composer controls`);
+async function waitFor(predicate, timeoutMs, message) {
+  await waitForResult(() => predicate() ? true : null, timeoutMs, message);
+}
 
-  const context = [...new Set([...semantic, ...visibleLabels])].slice(0, 12).join(", ") || "none";
-  throw new Error(`Codex repository context does not match target ${targetRepository}; visible provider context: ${context}`);
+async function waitForResult(producer, timeoutMs, message) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = producer();
+    if (result) return result;
+    await sleep(50);
+  }
+  throw new Error(message);
+}
+
+function visibleText(node) {
+  return normalizeText(node?.innerText || node?.textContent || "").replace(/\0/g, "");
 }
 
 async function waitForCodexSubmission({ beforeUrl, prompt }) {
