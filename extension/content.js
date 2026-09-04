@@ -216,7 +216,7 @@ function findCodexSubmitButton(required = true) {
     .filter(isEnabled)
     .filter((node) => normalizedLabels.has(accessibleText(node).toLowerCase()));
 
-  if (buttons.length > 1) throw new Error(`Codex submit control is ambiguous; found ${buttons.length} semantic candidates`);
+  if (buttons.length > 1) throw new Error(`Codex submit control is ambiguous; found ${buttons.length} label candidates`);
   if (required && buttons.length !== 1) throw new Error(`required Codex submit control not found; expected one of: ${labels.join(", ")}`);
   return buttons[0] ?? null;
 }
