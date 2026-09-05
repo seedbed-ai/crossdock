@@ -35,11 +35,12 @@ async function submitCodexPrompt(prompt, targetRepository, targetBranch) {
   const input = findCodexPromptInput(true);
   setEditableValue(input, prompt);
 
-  const beforeUrl = location.href;
+  const beforeTaskUrls = findCodexTaskLinks();
   const submitButton = await waitForCodexSubmitButton(5_000);
   submitButton.click();
 
-  const taskUrl = await waitForCodexSubmission({ beforeUrl, prompt });
+  const taskUrl = await waitForCodexSubmission({ beforeTaskUrls });
+  scheduleCodexTaskNavigation(taskUrl);
   return { taskUrl, providerContext: { repository: targetRepository, base_branch: targetBranch } };
 }
 
@@ -178,25 +179,51 @@ function visibleText(node) {
   return normalizeText(node?.innerText || node?.textContent || "").replace(/\0/g, "");
 }
 
-async function waitForCodexSubmission({ beforeUrl, prompt }) {
-  const deadline = Date.now() + 15_000;
+async function waitForCodexSubmission({ beforeTaskUrls }) {
+  const baseline = new Set(beforeTaskUrls);
+  const deadline = Date.now() + 30_000;
+
   while (Date.now() < deadline) {
-    if (location.href !== beforeUrl) return location.href;
+    const currentTaskUrl = canonicalCodexTaskUrl(location.href);
+    if (currentTaskUrl) return currentTaskUrl;
 
-    const currentInput = findCodexPromptInput(false);
-    const currentValue = currentInput ? editableValue(currentInput) : "";
-    const composerNoLongerContainsPrompt = !currentInput || currentValue !== prompt;
-    const submitStillAvailable = Boolean(findCodexSubmitButton(false));
+    const newTaskUrls = [...new Set(
+      findCodexTaskLinks().filter((url) => !baseline.has(url)),
+    )];
 
-    // Codex may transition in place before assigning a task URL. Require both
-    // the submitted prompt to leave the composer and the submit/start control
-    // to disappear before claiming that submission succeeded.
-    if (composerNoLongerContainsPrompt && !submitStillAvailable) return location.href;
+    if (newTaskUrls.length > 1) {
+      throw new Error(`Codex task submission is ambiguous; found ${newTaskUrls.length} new concrete task URLs`);
+    }
+    if (newTaskUrls.length === 1) return newTaskUrls[0];
 
     await sleep(100);
   }
 
-  throw new Error("Codex task submission was not confirmed; the task may still be waiting in the composer");
+  throw new Error("Codex task submission was not confirmed with a concrete task URL");
+}
+
+function canonicalCodexTaskUrl(value) {
+  try {
+    const url = new URL(value, location.origin);
+    if (url.origin !== location.origin) return null;
+    if (!/^\/codex\/cloud\/tasks\/[^/?#]+$/.test(url.pathname)) return null;
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return null;
+  }
+}
+
+function findCodexTaskLinks() {
+  return [...document.querySelectorAll('a[href*="/codex/cloud/tasks/"]')]
+    .filter(isVisible)
+    .map((anchor) => canonicalCodexTaskUrl(anchor.href))
+    .filter(Boolean);
+}
+
+function scheduleCodexTaskNavigation(taskUrl) {
+  setTimeout(() => {
+    if (canonicalCodexTaskUrl(location.href) !== taskUrl) location.assign(taskUrl);
+  }, 0);
 }
 
 function findCodexPromptInput(required = true) {
