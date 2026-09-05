@@ -69,6 +69,16 @@ $("submit").addEventListener("click", run(async () => {
     ? await publish("/pr/snapshot", { target_repository: repository, pull_request: prNumber }, serviceUrl)
     : null;
 
+  if (initialSnapshot && (
+    initialSnapshot.repository !== repository ||
+    typeof initialSnapshot.working_branch !== "string" ||
+    !initialSnapshot.working_branch.trim() ||
+    typeof initialSnapshot.head_sha !== "string" ||
+    !initialSnapshot.head_sha.trim()
+  )) {
+    throw new Error("existing PR snapshot did not return the configured repository, working branch, and head SHA");
+  }
+
   const pending = {
     task_id: `crossdock-${crypto.randomUUID()}`,
     created_at: new Date().toISOString(),
@@ -84,6 +94,7 @@ $("submit").addEventListener("click", run(async () => {
     storage,
     pull_request: prNumber,
     initial_head_sha: initialSnapshot?.head_sha ?? null,
+    initial_working_branch: initialSnapshot?.working_branch?.trim() ?? null,
     phase: "submitting",
   };
 
@@ -92,9 +103,14 @@ $("submit").addEventListener("click", run(async () => {
   await persist();
 
   const result = await send({ type: "crossdock.submitCodex", prompt });
-  taskState = { ...pending, task_url: result.taskUrl, phase: "running" };
+  taskState = {
+    ...pending,
+    task_url: result.taskUrl,
+    provider_branch: result.providerContext?.base_branch ?? null,
+    phase: "running",
+  };
   await saveTaskState();
-  setStatus(`Task submitted. Monitoring for ${mode === "initial" ? "Create PR" : "Update branch"} readiness…`);
+  setStatus(`Task submitted. Monitoring for ${mode === "initial" ? "Create PR" : "provider publication"} readiness…`);
   void monitorTask();
 }));
 
@@ -120,6 +136,11 @@ async function monitorTask() {
     while (taskState) {
       if (taskState.phase === "pr-create-integrity-error") {
         setStatus(`PR creation integrity failure: ${taskState.pr_integrity_error}`, true);
+        return;
+      }
+
+      if (taskState.phase === "pr-update-integrity-error") {
+        setStatus(`PR update integrity failure: ${taskState.pr_integrity_error}`, true);
         return;
       }
 
@@ -165,7 +186,11 @@ async function monitorTask() {
 
       try {
         const state = await send({ type: "crossdock.inspectCodex" });
-        const ready = taskState.mode === "initial" ? state.createPrAvailable : state.updateBranchAvailable;
+        const updateActionCount = Number(Boolean(state.updateBranchAvailable)) + Number(Boolean(state.createPrAvailable));
+        if (taskState.mode === "update" && updateActionCount > 1) {
+          throw new Error(`Codex update publication action is ambiguous; found ${updateActionCount} supported controls`);
+        }
+        const ready = taskState.mode === "initial" ? state.createPrAvailable : updateActionCount === 1;
         if (ready) {
           taskState.phase = "ready";
           await saveTaskState();
@@ -174,10 +199,10 @@ async function monitorTask() {
             else await finalizeUpdate();
             continue;
           }
-          setStatus(`Task is ready. Review the task and choose ${taskState.mode === "initial" ? "Finalize new PR" : "Finalize branch update"}.`);
+          setStatus(`Task is ready. Review the task and choose ${taskState.mode === "initial" ? "Finalize new PR" : "Finalize PR update"}.`);
           return;
         }
-        setStatus(`Task is still running. Waiting for ${taskState.mode === "initial" ? "Create PR" : "Update branch"}…`);
+        setStatus(`Task is still running. Waiting for ${taskState.mode === "initial" ? "Create PR" : "provider publication action"}…`);
       } catch (error) {
         setStatus(`Monitoring: ${error.message}. Will retry.`, true);
       }
@@ -288,18 +313,29 @@ async function finishInitialAfterPrCreated() {
 async function finalizeUpdate() {
   requireTaskState("update");
   if (!["running", "ready"].includes(taskState.phase)) throw new Error(`update task cannot finalize from phase ${taskState.phase}`);
+
+  const preAction = await publish("/pr/snapshot", {
+    target_repository: taskState.repository,
+    pull_request: taskState.pull_request,
+  });
+  assertUpdatePreActionSnapshot(preAction);
+
   taskState.phase = "finalizing";
   await saveTaskState();
-  setStatus("Updating the PR branch and verifying the remote head…");
+  setStatus("Publishing the update and verifying the existing PR head…");
 
   try {
     const result = await send({
       type: "crossdock.applyBranchUpdate",
+      targetRepository: taskState.repository,
+      pullRequest: taskState.pull_request,
       captureReport: taskState.evidence_policy.report !== "omit",
     });
     taskState.phase = "branch-update-clicked";
     taskState.final_task_url = result.taskUrl;
     taskState.final_report = result.report;
+    taskState.update_pr_discovery = result.discovery;
+    taskState.provider_action = result.providerAction;
     await saveTaskState();
     await finishUpdateAfterRemoteChange();
   } catch (error) {
@@ -320,6 +356,8 @@ async function finishUpdateAfterRemoteChange() {
     repository: taskState.repository,
     prNumber: taskState.pull_request,
     previousSha: taskState.initial_head_sha,
+    workingBranch: taskState.initial_working_branch,
+    discovery: taskState.update_pr_discovery,
   });
   const stored = await chrome.storage.local.get("parentTaskId");
   const result = { taskUrl: taskState.final_task_url, report: taskState.final_report };
@@ -336,18 +374,69 @@ async function finishUpdateAfterRemoteChange() {
 
   const prNumber = taskState.pull_request;
   await completeTask(prNumber);
-  setStatus(`Branch update recorded on PR #${prNumber} at ${changed.head_sha.slice(0, 12)}.`);
+  setStatus(`PR update recorded on #${prNumber} at ${changed.head_sha.slice(0, 12)}.`);
 }
 
-async function waitForPrHeadChange({ repository, prNumber, previousSha }) {
+function assertUpdatePreActionSnapshot(snapshot) {
+  if (!taskState.initial_working_branch) throw new Error("pre-update PR working branch snapshot is missing");
+  if (!taskState.initial_head_sha) throw new Error("pre-update PR head snapshot is missing");
+  if (taskState.provider_branch !== taskState.initial_working_branch) {
+    throw new Error(`Codex provider branch does not match frozen PR working branch: ${taskState.provider_branch || "none"}`);
+  }
+  if (snapshot.repository !== taskState.repository) throw new Error("existing PR repository changed before provider publication");
+  if (snapshot.working_branch !== taskState.initial_working_branch) throw new Error("existing PR working branch changed before provider publication");
+  if (snapshot.head_sha !== taskState.initial_head_sha) throw new Error("existing PR head changed before provider publication");
+}
+
+async function waitForPrHeadChange({ repository, prNumber, previousSha, workingBranch, discovery }) {
   if (!previousSha) throw new Error("pre-update PR head snapshot is missing");
+  if (!workingBranch) throw new Error("pre-update PR working branch snapshot is missing");
+  if (!discovery) throw new Error("update PR discovery baseline is missing");
+
   const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
+    const evidence = await send({
+      type: "crossdock.inspectUpdatePrEvidence",
+      targetRepository: repository,
+      pullRequest: prNumber,
+      discovery,
+    });
+    if (evidence.integrityError) {
+      taskState.phase = "pr-update-integrity-error";
+      taskState.pr_integrity_error = evidence.integrityError;
+      await saveTaskState();
+      throw new Error(evidence.integrityError);
+    }
+
     const snapshot = await publish("/pr/snapshot", { target_repository: repository, pull_request: prNumber });
-    if (snapshot.head_sha && snapshot.head_sha !== previousSha) return snapshot;
+    if (snapshot.repository !== repository || snapshot.working_branch !== workingBranch) {
+      const message = "existing PR repository or working branch changed after provider publication";
+      taskState.phase = "pr-update-integrity-error";
+      taskState.pr_integrity_error = message;
+      await saveTaskState();
+      throw new Error(message);
+    }
+
+    if (snapshot.head_sha && snapshot.head_sha !== previousSha) {
+      const finalEvidence = await send({
+        type: "crossdock.inspectUpdatePrEvidence",
+        targetRepository: repository,
+        pullRequest: prNumber,
+        discovery,
+      });
+      if (finalEvidence.integrityError) {
+        taskState.phase = "pr-update-integrity-error";
+        taskState.pr_integrity_error = finalEvidence.integrityError;
+        await saveTaskState();
+        throw new Error(finalEvidence.integrityError);
+      }
+      return snapshot;
+    }
+
     await sleep(2000);
   }
-  throw new Error("timed out waiting for the GitHub PR head to change after Update branch");
+
+  throw new Error("timed out waiting for the existing GitHub PR head to change after provider publication");
 }
 
 async function completeTask(prNumber) {

@@ -295,7 +295,11 @@ function inspectCodexComposer() {
 
 function inspectCodexTask() {
   requireCodexPage();
-  return { taskUrl: location.href, createPrAvailable: Boolean(findButton(["Create PR"], false)), updateBranchAvailable: Boolean(findButton(["Update branch"], false)) };
+  return {
+    taskUrl: location.href,
+    createPrAvailable: Boolean(findButton(["Create PR"], false)),
+    updateBranchAvailable: Boolean(findButton(["Update branch"], false)),
+  };
 }
 
 function prepareCreatePr(captureReport = true) {
@@ -308,9 +312,19 @@ function prepareCreatePr(captureReport = true) {
 
 function prepareBranchUpdate(captureReport = true) {
   requireCodexPage();
-  const result = { taskUrl: location.href };
+
+  const actions = [
+    { providerAction: "update_branch", button: findButton(["Update branch"], false) },
+    { providerAction: "create_pr", button: findButton(["Create PR"], false) },
+  ].filter(({ button }) => Boolean(button));
+
+  if (actions.length !== 1) {
+    throw new Error(`Codex update publication action must resolve to exactly one supported control; found ${actions.length}`);
+  }
+
+  const result = { taskUrl: location.href, providerAction: actions[0].providerAction };
   if (captureReport) result.report = captureCodexReport();
-  findButton(["Update branch"], true).click();
+  actions[0].button.click();
   return result;
 }
 

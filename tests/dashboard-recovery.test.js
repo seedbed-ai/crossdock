@@ -106,9 +106,32 @@ test("captured memory-only report stays live for handoff but never enters persis
   globalThis.document = { getElementById: (id) => elements.get(id) ?? null, querySelectorAll: () => [] };
   globalThis.chrome = {
     runtime: { async sendMessage(message) {
-      if (message.type === "crossdock.submitCodex") return { ok: true, result: { taskUrl: "https://agent.example/tasks/2" } };
-      if (message.type === "crossdock.inspectCodex") return { ok: true, result: { updateBranchAvailable: true } };
-      if (message.type === "crossdock.applyBranchUpdate") return { ok: true, result: { taskUrl: "https://agent.example/tasks/2", report: "private report bytes" } };
+      if (message.type === "crossdock.submitCodex") {
+        return {
+          ok: true,
+          result: {
+            taskUrl: "https://agent.example/tasks/2",
+            providerContext: { repository: "example/repo", base_branch: "feature/update" },
+          },
+        };
+      }
+      if (message.type === "crossdock.inspectCodex") {
+        return { ok: true, result: { updateBranchAvailable: true, createPrAvailable: false } };
+      }
+      if (message.type === "crossdock.applyBranchUpdate") {
+        return {
+          ok: true,
+          result: {
+            taskUrl: "https://agent.example/tasks/2",
+            report: "private report bytes",
+            providerAction: "update_branch",
+            discovery: { beforePrUrls: [] },
+          },
+        };
+      }
+      if (message.type === "crossdock.inspectUpdatePrEvidence") {
+        return { ok: true, result: { integrityError: null } };
+      }
       return { ok: true, result: {} };
     } },
     storage: { local: {
@@ -119,7 +142,14 @@ test("captured memory-only report stays live for handoff but never enters persis
   };
   globalThis.fetch = async (url, init) => {
     requests.push({ url, init });
-    if (url.endsWith("/pr/snapshot")) return okResponse({ head_sha: requests.filter((call) => call.url.endsWith("/pr/snapshot")).length === 1 ? "old" : "new" });
+    if (url.endsWith("/pr/snapshot")) {
+      const count = requests.filter((call) => call.url.endsWith("/pr/snapshot")).length;
+      return okResponse({
+        repository: "example/repo",
+        working_branch: "feature/update",
+        head_sha: count <= 2 ? "old" : "new",
+      });
+    }
     if (url.endsWith("/handoff/update")) return okResponse({ task_record_url: "https://records.example/task" });
     throw new Error(`unexpected fetch: ${url}`);
   };

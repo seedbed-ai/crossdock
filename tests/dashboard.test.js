@@ -176,6 +176,8 @@ test("dashboard restoration keeps recovered update requests on frozen endpoint a
       storage: { repository: "example/records", branch: "main" },
       pull_request: 7,
       initial_head_sha: "old-head",
+      initial_working_branch: "feature/update",
+      provider_branch: "feature/update",
       task_url: "https://agent.example/tasks/1",
       phase: "ready",
     },
@@ -191,7 +193,18 @@ test("dashboard restoration keeps recovered update requests on frozen endpoint a
     runtime: {
       async sendMessage(message) {
         if (message.type === "crossdock.applyBranchUpdate") {
-          return { ok: true, result: { taskUrl: "https://agent.example/tasks/1", report: "Done" } };
+          return {
+            ok: true,
+            result: {
+              taskUrl: "https://agent.example/tasks/1",
+              report: "Done",
+              providerAction: "create_pr",
+              discovery: { beforePrUrls: [] },
+            },
+          };
+        }
+        if (message.type === "crossdock.inspectUpdatePrEvidence") {
+          return { ok: true, result: { integrityError: null } };
         }
         return { ok: true, result: {} };
       },
@@ -207,9 +220,17 @@ test("dashboard restoration keeps recovered update requests on frozen endpoint a
       },
     },
   };
+  let prSnapshotCalls = 0;
   globalThis.fetch = async (url, init) => {
     fetchCalls.push({ url, init });
-    if (url.endsWith("/pr/snapshot")) return okResponse({ head_sha: "new-head" });
+    if (url.endsWith("/pr/snapshot")) {
+      prSnapshotCalls += 1;
+      return okResponse({
+        repository: "example/repo",
+        working_branch: "feature/update",
+        head_sha: prSnapshotCalls === 1 ? "old-head" : "new-head",
+      });
+    }
     if (url.endsWith("/handoff/update")) return okResponse({ task_record_url: "https://records.example/task" });
     throw new Error(`unexpected fetch: ${url}`);
   };
