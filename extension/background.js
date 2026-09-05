@@ -40,13 +40,16 @@ async function handleMessage(message) {
       }
       const targetBranch = snapshot.default_branch.trim();
       const tab = await ensureCodexTab();
+      // Codex repository/environment transitions are provider UI work. Keep the
+      // provider tab foregrounded before driving those controls so browser
+      // background-tab scheduling does not delay or starve React state updates.
+      await chrome.tabs.update(tab.id, { active: true });
       const result = await sendToTab(tab.id, {
         type: "crossdock.submitCodex",
         prompt: message.prompt,
         targetRepository,
         targetBranch,
       });
-      await chrome.tabs.update(tab.id, { active: true });
       return { ...result, providerContext: { repository: targetRepository, base_branch: targetBranch } };
     }
     case "crossdock.inspectCodex": {
