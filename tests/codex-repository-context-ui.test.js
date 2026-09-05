@@ -77,8 +77,8 @@ test("repository confirmation allows observed slow provider transitions to settl
 test("branch selection uses authenticated Codex semantic controls and exact branch text", () => {
   assert.match(contentSource, /Search for your branch/);
   assert.match(contentSource, /ensureCodexBranchContext/);
-  assert.match(contentSource, /exactVisibleButtonChoices\(dialog, expected\)/);
-  assert.match(contentSource, /branch is not visible in the branch chooser/);
+  assert.match(contentSource, /waitForUniqueExactVisibleButtonChoice\(/);
+  assert.match(contentSource, /branch did not become visible in the branch chooser/);
   assert.match(contentSource, /Codex branch selection was not confirmed/);
   assert.match(contentSource, /selected provider branch/);
 });
@@ -88,7 +88,7 @@ test("branch confirmation re-resolves the live semantic selector after selection
   const end = contentSource.indexOf("function assertCodexRepositoryContext");
   const branchSelection = contentSource.slice(start, end);
   assert.ok(start >= 0 && end > start);
-  assert.match(branchSelection, /candidates\[0\]\.click\(\);[\s\S]*await waitFor\(\(\) => \{[\s\S]*const currentSelector = findUniqueSemanticButton\("Search for your branch"\)/);
+  assert.match(branchSelection, /candidate\.click\(\);[\s\S]*await waitFor\(\(\) => \{[\s\S]*const currentSelector = findUniqueSemanticButton\("Search for your branch"\)/);
   assert.match(branchSelection, /visibleText\(currentSelector\) === expected/);
   assert.match(branchSelection, /currentSelector\.getAttribute\("aria-expanded"\) !== "true"/);
   assert.doesNotMatch(branchSelection, /await waitFor\(\(\) => visibleText\(selector\) === expected/);
@@ -159,4 +159,17 @@ test("Codex concrete task discovery is same-origin, semantic, and schedules task
   assert.match(contentSource, /\^\\\/codex\\\/cloud\\\/tasks\\\//);
   assert.match(contentSource, /function scheduleCodexTaskNavigation\(taskUrl\)/);
   assert.match(contentSource, /location\.assign\(taskUrl\)/);
+});
+
+test("branch chooser waits for delayed exact option rendering before resolving", () => {
+  const start = contentSource.indexOf("async function ensureCodexBranchContext");
+  const end = contentSource.indexOf("function assertCodexRepositoryContext");
+  const branchSelection = contentSource.slice(start, end);
+
+  assert.match(branchSelection, /await waitForUniqueExactVisibleButtonChoice\([\s\S]*dialog,[\s\S]*expected,[\s\S]*5_000/);
+  assert.match(contentSource, /async function waitForUniqueExactVisibleButtonChoice/);
+  assert.match(contentSource, /exactVisibleButtonChoices\(scope, expectedText\)/);
+  assert.match(contentSource, /candidates\.length > 1/);
+  assert.match(contentSource, /candidates\.length === 1/);
+  assert.match(contentSource, /await sleep\(50\)/);
 });
