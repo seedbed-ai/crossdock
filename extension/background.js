@@ -76,7 +76,21 @@ async function handleMessage(message) {
     }
     case "crossdock.applyBranchUpdate": {
       const tab = await findChatGptTab(true);
-      return sendToTab(tab.id, { type: "crossdock.prepareBranchUpdate", captureReport: message.captureReport !== false });
+      const discovery = { beforePrUrls: await snapshotPrEvidence(tab.id) };
+      const prepared = await sendToTab(tab.id, {
+        type: "crossdock.prepareBranchUpdate",
+        captureReport: message.captureReport !== false,
+      });
+      return { ...prepared, discovery };
+    }
+    case "crossdock.inspectUpdatePrEvidence": {
+      const tab = await findChatGptTab(true);
+      return inspectUpdatePrEvidence({
+        tabId: tab.id,
+        targetRepository: message.targetRepository,
+        pullRequest: message.pullRequest,
+        discovery: message.discovery,
+      });
     }
     case "crossdock.openChatGPT": return activateOrCreate(CHATGPT_URL, false);
     case "crossdock.openCodex": return activateOrCreate(CODEX_URL, true);
@@ -241,6 +255,33 @@ async function snapshotPrEvidence(tabId) {
 function wrongRepositoryPrMessage(targetRepository, urls) {
   const repositories = [...new Set(urls.map(repositoryFromGitHubPrUrl))];
   return `created PR integrity failure: expected repository ${targetRepository}, but new PR evidence appeared in ${repositories.join(", ")}: ${urls.join(", ")}`;
+}
+
+async function inspectUpdatePrEvidence({ tabId, targetRepository, pullRequest, discovery }) {
+  if (!Number.isInteger(pullRequest) || pullRequest <= 0) {
+    throw new Error("existing pull request must be a positive integer");
+  }
+
+  const evidence = await findNewPrEvidence({ tabId, targetRepository, discovery });
+  if (evidence.wrongRepository.length) {
+    const repositories = [...new Set(evidence.wrongRepository.map(repositoryFromGitHubPrUrl))];
+    return {
+      integrityError: `update PR integrity failure: expected repository ${targetRepository}, but new PR evidence appeared in ${repositories.join(", ")}: ${evidence.wrongRepository.join(", ")}`,
+    };
+  }
+
+  const expectedPrUrl = canonicalPrUrl(
+    `https://github.com/${targetRepository}/pull/${pullRequest}`,
+    targetRepository,
+  );
+  const unexpectedTarget = evidence.target.filter((url) => url !== expectedPrUrl);
+  if (unexpectedTarget.length) {
+    return {
+      integrityError: `update PR integrity failure: expected existing PR ${expectedPrUrl}, but new target-repository PR evidence appeared: ${unexpectedTarget.join(", ")}`,
+    };
+  }
+
+  return { integrityError: null };
 }
 
 function canonicalPrUrl(value, targetRepository) {
