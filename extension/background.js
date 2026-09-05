@@ -30,16 +30,12 @@ async function handleMessage(message) {
         throw new Error("target repository must be configured as owner/repo before Codex submission");
       }
       const serviceUrl = stored.dashboard?.["service-url"];
-      const snapshot = await postServiceJson({
-        path: "/repository/snapshot",
-        body: { target_repository: targetRepository },
-        preference: serviceUrl,
+      const targetBranch = await resolveSubmissionBranch({
+        targetRepository,
+        pullRequest: stored.dashboard?.["pull-request"],
+        serviceUrl,
       });
-      if (snapshot.repository !== targetRepository || typeof snapshot.default_branch !== "string" || !snapshot.default_branch.trim()) {
-        throw new Error("target repository snapshot did not return the configured repository and default branch");
-      }
-      const targetBranch = snapshot.default_branch.trim();
-      const tab = await ensureCodexTab();
+      const tab = await ensureCodexComposerTab();
       // Codex repository/environment transitions are provider UI work. Keep the
       // provider tab foregrounded before driving those controls so browser
       // background-tab scheduling does not delay or starve React state updates.
@@ -91,6 +87,32 @@ async function handleMessage(message) {
   }
 }
 
+async function resolveSubmissionBranch({ targetRepository, pullRequest, serviceUrl }) {
+  const rawPullRequest = typeof pullRequest === "string" ? pullRequest.trim() : "";
+  if (rawPullRequest) {
+    if (!/^\d+$/.test(rawPullRequest) || Number(rawPullRequest) <= 0) throw new Error("existing pull request must be a positive integer");
+    const snapshot = await postServiceJson({
+      path: "/pr/snapshot",
+      body: { target_repository: targetRepository, pull_request: Number(rawPullRequest) },
+      preference: serviceUrl,
+    });
+    if (snapshot.repository !== targetRepository || typeof snapshot.working_branch !== "string" || !snapshot.working_branch.trim()) {
+      throw new Error("existing pull request snapshot did not return the configured repository and working branch");
+    }
+    return snapshot.working_branch.trim();
+  }
+
+  const snapshot = await postServiceJson({
+    path: "/repository/snapshot",
+    body: { target_repository: targetRepository },
+    preference: serviceUrl,
+  });
+  if (snapshot.repository !== targetRepository || typeof snapshot.default_branch !== "string" || !snapshot.default_branch.trim()) {
+    throw new Error("target repository snapshot did not return the configured repository and default branch");
+  }
+  return snapshot.default_branch.trim();
+}
+
 async function openDashboard() {
   const dashboards = (await chrome.tabs.query({})).filter((tab) => tab.url === DASHBOARD_URL);
   if (dashboards.length > 1) throw new Error(`dashboard tab is ambiguous; found ${dashboards.length}`);
@@ -110,6 +132,15 @@ async function ensureCodexTab() {
   if (tabs.length > 1) throw new Error(`Codex tab is ambiguous; found ${tabs.length}`);
   if (tabs.length === 1) return tabs[0];
   const tab = await chrome.tabs.create({ url: CODEX_URL, active: true });
+  await waitForTabComplete(tab.id);
+  return chrome.tabs.get(tab.id);
+}
+
+async function ensureCodexComposerTab() {
+  const tab = await ensureCodexTab();
+  const current = new URL(tab.url);
+  if (current.origin === new URL(CODEX_URL).origin && current.pathname === new URL(CODEX_URL).pathname) return tab;
+  await chrome.tabs.update(tab.id, { url: CODEX_URL, active: true });
   await waitForTabComplete(tab.id);
   return chrome.tabs.get(tab.id);
 }
