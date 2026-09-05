@@ -139,10 +139,34 @@ async function ensureCodexTab() {
 async function ensureCodexComposerTab() {
   const tab = await ensureCodexTab();
   const current = new URL(tab.url);
-  if (current.origin === new URL(CODEX_URL).origin && current.pathname === new URL(CODEX_URL).pathname) return tab;
-  await chrome.tabs.update(tab.id, { url: CODEX_URL, active: true });
-  await waitForTabComplete(tab.id);
+
+  if (current.origin !== new URL(CODEX_URL).origin || current.pathname !== new URL(CODEX_URL).pathname) {
+    await chrome.tabs.update(tab.id, { url: CODEX_URL, active: true });
+    await waitForTabComplete(tab.id);
+  } else {
+    await chrome.tabs.update(tab.id, { active: true });
+  }
+
+  await waitForCodexComposerReady(tab.id);
   return chrome.tabs.get(tab.id);
+}
+
+async function waitForCodexComposerReady(tabId) {
+  const deadline = Date.now() + 30_000;
+
+  while (Date.now() < deadline) {
+    try {
+      const result = await sendToTab(tabId, { type: "crossdock.inspectCodexComposer" });
+      if (result?.ready === true) return;
+    } catch (error) {
+      if (error.message?.includes("ambiguous")) throw error;
+      // During navigation/hydration the content script or semantic control may
+      // not be ready yet. Retry only within this bounded readiness window.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  throw new Error("timed out waiting for Codex composer semantic controls");
 }
 
 async function activateOrCreate(url, codex) {
