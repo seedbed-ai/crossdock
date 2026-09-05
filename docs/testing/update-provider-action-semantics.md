@@ -37,3 +37,7 @@ An unexpected new PR, repository mismatch, working-branch mismatch, stale pre-ac
 - Do not manually rescue a provider-created PR into the intended PR.
 - Do not weaken repository/branch/PR integrity checks.
 - Do not require the user to click Codex publication controls directly.
+
+## Implementation note
+
+The first local patch script aborted before writing any files because it relied on an exact multi-line source match for `finalizeUpdate()`. The script performs file writes only after all source transformations succeed, so this failure should leave the local working tree unchanged. The retry should replace whole functions by function boundaries rather than matching brittle internal whitespace or nearby text.
