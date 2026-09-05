@@ -36,7 +36,8 @@ async function submitCodexPrompt(prompt, targetRepository, targetBranch) {
   setEditableValue(input, prompt);
 
   const beforeUrl = location.href;
-  findCodexSubmitButton(true).click();
+  const submitButton = await waitForCodexSubmitButton(5_000);
+  submitButton.click();
 
   const taskUrl = await waitForCodexSubmission({ beforeUrl, prompt });
   return { taskUrl, providerContext: { repository: targetRepository, base_branch: targetBranch } };
@@ -193,6 +194,14 @@ function findCodexPromptInput(required = true) {
   if (nodes.length > 1) throw new Error(`Codex prompt input must resolve to at most one visible element; found ${nodes.length}`);
   if (required && nodes.length !== 1) throw new Error(`Codex prompt input must resolve to exactly one visible element; found ${nodes.length}`);
   return nodes[0] ?? null;
+}
+
+async function waitForCodexSubmitButton(timeoutMs) {
+  return waitForResult(
+    () => findCodexSubmitButton(false),
+    timeoutMs,
+    "Codex submit control did not become ready after prompt entry",
+  );
 }
 
 function findCodexSubmitButton(required = true) {

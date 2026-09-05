@@ -34,10 +34,12 @@ test("Codex submission resolves repository and branch context before writing or 
   const repositoryResolution = submit.indexOf("await ensureCodexRepositoryContext(targetRepository)");
   const branchResolution = submit.indexOf("await ensureCodexBranchContext(targetBranch)");
   const promptWrite = submit.indexOf("setEditableValue(input, prompt)");
-  const submitClick = submit.indexOf("findCodexSubmitButton(true).click()");
+  const submitReady = submit.indexOf("await waitForCodexSubmitButton(5_000)");
+  const submitClick = submit.indexOf("submitButton.click()");
   assert.ok(repositoryResolution >= 0 && repositoryResolution < branchResolution);
   assert.ok(branchResolution < promptWrite);
-  assert.ok(branchResolution < submitClick);
+  assert.ok(promptWrite < submitReady);
+  assert.ok(submitReady < submitClick);
 });
 
 test("repository selection uses authenticated Codex semantic controls and exact repository text", () => {
@@ -103,4 +105,12 @@ test("branch confirmation uses the same extended transition timeout", () => {
 test("provider context is returned with exact repository and frozen base branch", () => {
   assert.match(contentSource, /providerContext: \{ repository: targetRepository, base_branch: targetBranch \}/);
   assert.match(backgroundSource, /providerContext: \{ repository: targetRepository, base_branch: targetBranch \}/);
+});
+
+test("Codex submission waits boundedly for the semantic submit control to become ready", () => {
+  const start = contentSource.indexOf("async function submitCodexPrompt");
+  const end = contentSource.indexOf("async function ensureCodexRepositoryContext");
+  const submit = contentSource.slice(start, end);
+  assert.match(submit, /setEditableValue\(input, prompt\)[\s\S]*await waitForCodexSubmitButton\(5_000\)[\s\S]*submitButton\.click\(\)/);
+  assert.match(contentSource, /async function waitForCodexSubmitButton\(timeoutMs\)[\s\S]*findCodexSubmitButton\(false\)[\s\S]*Codex submit control did not become ready after prompt entry/);
 });
