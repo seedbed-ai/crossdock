@@ -130,3 +130,33 @@ test("repository environment fallback stays fail-closed on ambiguity", () => {
   assert.match(contentSource, /environmentCandidates\.length > 1/);
   assert.match(contentSource, /found \$\{environmentCandidates\.length\} matching environment choices/);
 });
+
+test("Codex submission requires a concrete task URL before reporting success", () => {
+  const submitStart = contentSource.indexOf("async function submitCodexPrompt");
+  const submitEnd = contentSource.indexOf("async function ensureCodexRepositoryContext");
+  const submit = contentSource.slice(submitStart, submitEnd);
+
+  assert.match(submit, /const beforeTaskUrls = findCodexTaskLinks\(\)/);
+  assert.match(
+    submit,
+    /submitButton\.click\(\)[\s\S]*await waitForCodexSubmission\(\{ beforeTaskUrls \}\)[\s\S]*scheduleCodexTaskNavigation\(taskUrl\)/,
+  );
+
+  const waitStart = contentSource.indexOf("async function waitForCodexSubmission");
+  const waitEnd = contentSource.indexOf("function findCodexPromptInput");
+  const wait = contentSource.slice(waitStart, waitEnd);
+
+  assert.match(wait, /canonicalCodexTaskUrl\(location\.href\)/);
+  assert.match(wait, /findCodexTaskLinks\(\)\.filter/);
+  assert.match(wait, /new concrete task URLs/);
+  assert.match(wait, /not confirmed with a concrete task URL/);
+  assert.doesNotMatch(wait, /return location\.href/);
+});
+
+test("Codex concrete task discovery is same-origin, semantic, and schedules task-page navigation", () => {
+  assert.match(contentSource, /a\[href\*="\/codex\/cloud\/tasks\/"\]/);
+  assert.match(contentSource, /url\.origin !== location\.origin/);
+  assert.match(contentSource, /\^\\\/codex\\\/cloud\\\/tasks\\\//);
+  assert.match(contentSource, /function scheduleCodexTaskNavigation\(taskUrl\)/);
+  assert.match(contentSource, /location\.assign\(taskUrl\)/);
+});
