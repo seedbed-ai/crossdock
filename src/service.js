@@ -1,4 +1,5 @@
 import { publishExistingInitialHandoff, publishUpdateHandoff } from "./handoff.js";
+import { resolveOriginBinding } from "./origin-binding-storage.js";
 
 export async function dispatchHandoff({ method, path, body, github }) {
   if (method === "GET" && path === "/health") return { status: 200, body: { ok: true } };
@@ -19,6 +20,32 @@ export async function dispatchHandoff({ method, path, body, github }) {
       pull_request: body.pull_request,
     });
     return { status: 200, body: { repository: task.target_repository, pull_request: task.pull_request, base_branch: task.base_branch, working_branch: task.working_branch, head_sha: task.result_commit } };
+  }
+
+  if (path === "/origin-binding/resolve") {
+    requireObject(body, "body");
+    requireObject(body.storage, "storage");
+    const repository = requireRepository(body.target_repository);
+    const pullRequest = requirePullRequest(body.pull_request);
+    const resolved = await resolveOriginBinding({
+      github,
+      storage: body.storage,
+      targetRepository: repository,
+      pullRequest,
+    });
+    const binding = resolved.binding;
+    return {
+      status: 200,
+      body: {
+        repository: binding.target_repository,
+        pull_request: binding.pull_request,
+        originating_task_id: binding.originating_task_id,
+        provider: binding.provider,
+        agent_task_url: binding.agent_task_url,
+        created_at: binding.created_at,
+        initial_working_branch: binding.initial_working_branch ?? null,
+      },
+    };
   }
 
   if (path === "/handoff/initial" || path === "/handoff/update") {
@@ -68,6 +95,11 @@ function summarizeUpdate(result) {
 function requireRepository(value) {
   if (typeof value !== "string" || !/^[^/\s]+\/[^/\s]+$/.test(value.trim())) throw new Error("target_repository is required in owner/repo form");
   return value.trim();
+}
+
+function requirePullRequest(value) {
+  if (!Number.isInteger(value) || value <= 0) throw new Error("pull_request is required");
+  return value;
 }
 
 function requireObject(value, label) {
