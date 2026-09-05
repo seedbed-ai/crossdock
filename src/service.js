@@ -1,5 +1,5 @@
 import { publishExistingInitialHandoff, publishUpdateHandoff } from "./handoff.js";
-import { resolveOriginBinding } from "./origin-binding-storage.js";
+import { persistOriginBinding, resolveOriginBinding } from "./origin-binding-storage.js";
 
 export async function dispatchHandoff({ method, path, body, github }) {
   if (method === "GET" && path === "/health") return { status: 200, body: { ok: true } };
@@ -20,6 +20,38 @@ export async function dispatchHandoff({ method, path, body, github }) {
       pull_request: body.pull_request,
     });
     return { status: 200, body: { repository: task.target_repository, pull_request: task.pull_request, base_branch: task.base_branch, working_branch: task.working_branch, head_sha: task.result_commit } };
+  }
+
+  if (path === "/origin-binding/persist") {
+    requireObject(body, "body");
+    requireObject(body.storage, "storage");
+    const repository = requireRepository(body.target_repository);
+    const pullRequest = requirePullRequest(body.pull_request);
+    const result = await persistOriginBinding({
+      github,
+      storage: body.storage,
+      binding: {
+        target_repository: repository,
+        pull_request: pullRequest,
+        originating_task_id: body.originating_task_id,
+        provider: body.provider,
+        agent_task_url: body.agent_task_url,
+        created_at: body.created_at,
+        ...(body.initial_working_branch == null ? {} : { initial_working_branch: body.initial_working_branch }),
+      },
+    });
+    return {
+      status: 200,
+      body: {
+        repository: result.binding.target_repository,
+        pull_request: result.binding.pull_request,
+        originating_task_id: result.binding.originating_task_id,
+        provider: result.binding.provider,
+        agent_task_url: result.binding.agent_task_url,
+        origin_binding_url: result.url,
+        origin_binding_version: result.version,
+      },
+    };
   }
 
   if (path === "/origin-binding/resolve") {
