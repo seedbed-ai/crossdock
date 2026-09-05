@@ -58,7 +58,7 @@ test("repository confirmation re-resolves the live semantic selector after selec
   const repositorySelection = contentSource.slice(start, end);
   assert.ok(start >= 0 && end > start);
   assert.match(repositorySelection, /candidates\[0\]\.click\(\);[\s\S]*await waitFor\(\(\) => \{[\s\S]*const currentSelector = findUniqueSemanticButton\("View all code environments"\)/);
-  assert.match(repositorySelection, /visibleText\(currentSelector\) === targetRepository/);
+  assert.match(repositorySelection, /visibleText\(currentSelector\) === expectedSelection/);
   assert.match(repositorySelection, /currentSelector\.getAttribute\("aria-expanded"\) !== "true"/);
   assert.doesNotMatch(repositorySelection, /await waitFor\(\(\) => visibleText\(selector\) === targetRepository/);
 });
