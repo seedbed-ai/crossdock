@@ -51,8 +51,9 @@ test("repository confirmation allows observed slow provider transitions to settl
   const start = contentSource.indexOf("async function ensureCodexRepositoryContext");
   const end = contentSource.indexOf("async function ensureCodexBranchContext");
   const repositorySelection = contentSource.slice(start, end);
-  assert.match(contentSource, /const CODEX_CONTEXT_SELECTION_TIMEOUT_MS = 45_000;/);
+  assert.match(contentSource, /const CODEX_CONTEXT_SELECTION_TIMEOUT_MS = 120_000;/);
   assert.match(repositorySelection, /CODEX_CONTEXT_SELECTION_TIMEOUT_MS/);
+  assert.doesNotMatch(repositorySelection, /\}, 45_000, `Codex repository selection was not confirmed/);
   assert.doesNotMatch(repositorySelection, /\}, 20_000, `Codex repository selection was not confirmed/);
   assert.doesNotMatch(repositorySelection, /\}, 5_000, `Codex repository selection was not confirmed/);
 });
@@ -82,6 +83,7 @@ test("branch confirmation uses the same extended transition timeout", () => {
   const end = contentSource.indexOf("function assertCodexRepositoryContext");
   const branchSelection = contentSource.slice(start, end);
   assert.match(branchSelection, /CODEX_CONTEXT_SELECTION_TIMEOUT_MS/);
+  assert.doesNotMatch(branchSelection, /\}, 45_000, `Codex branch selection was not confirmed/);
   assert.doesNotMatch(branchSelection, /\}, 20_000, `Codex branch selection was not confirmed/);
   assert.doesNotMatch(branchSelection, /\}, 5_000, `Codex branch selection was not confirmed/);
 });
