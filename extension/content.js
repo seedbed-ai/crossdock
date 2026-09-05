@@ -11,6 +11,7 @@ async function handleMessage(message) {
   switch (message.type) {
     case "crossdock.capturePrompt": return { assistantResponse: captureLatestAssistantResponse(), url: location.href };
     case "crossdock.submitCodex": return submitCodexPrompt(message.prompt, message.targetRepository, message.targetBranch);
+    case "crossdock.inspectCodexComposer": return inspectCodexComposer();
     case "crossdock.inspectCodex": return inspectCodexTask();
     case "crossdock.findPrUrls": return { prUrls: findPullRequestLinks(message.targetRepository) };
     case "crossdock.prepareCreatePr": return prepareCreatePr(message.captureReport !== false);
@@ -266,6 +267,20 @@ function findCodexSubmitButton(required = true) {
   if (buttons.length > 1) throw new Error(`Codex submit control is ambiguous; found ${buttons.length} label candidates`);
   if (required && buttons.length !== 1) throw new Error(`required Codex submit control not found; expected one of: ${labels.join(", ")}`);
   return buttons[0] ?? null;
+}
+
+function inspectCodexComposer() {
+  requireCodexPage();
+  const controls = [...document.querySelectorAll(
+    'button[aria-label="View all code environments"], [role="button"][aria-label="View all code environments"]',
+  )]
+    .filter(isVisible)
+    .filter(isEnabled);
+
+  if (controls.length > 1) {
+    throw new Error(`Codex composer readiness is ambiguous; found ${controls.length} visible repository/environment controls`);
+  }
+  return { ready: controls.length === 1 };
 }
 
 function inspectCodexTask() {

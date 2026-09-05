@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 
 const backgroundSource = await readFile(new URL("../extension/background.js", import.meta.url), "utf8");
 
-test("new Codex submissions return an existing task tab to the composer before provider automation", () => {
+test("new Codex submissions return to the composer and await semantic readiness before provider automation", () => {
   const start = backgroundSource.indexOf('case "crossdock.submitCodex"');
   const end = backgroundSource.indexOf('case "crossdock.inspectCodex"');
   const submitCase = backgroundSource.slice(start, end);
@@ -12,7 +12,12 @@ test("new Codex submissions return an existing task tab to the composer before p
   assert.ok(start >= 0 && end > start);
   assert.match(submitCase, /const tab = await ensureCodexComposerTab\(\)/);
   assert.match(backgroundSource, /const CODEX_URL = "https:\/\/chatgpt\.com\/codex\/cloud"/);
-  assert.match(backgroundSource, /async function ensureCodexComposerTab\(\)[\s\S]*chrome\.tabs\.update\(tab\.id, \{ url: CODEX_URL, active: true \}\)[\s\S]*await waitForTabComplete\(tab\.id\)/);
+  assert.match(
+    backgroundSource,
+    /async function ensureCodexComposerTab\(\)[\s\S]*chrome\.tabs\.update\(tab\.id, \{ url: CODEX_URL, active: true \}\)[\s\S]*await waitForTabComplete\(tab\.id\)[\s\S]*await waitForCodexComposerReady\(tab\.id\)/,
+  );
+  assert.match(backgroundSource, /type: "crossdock\.inspectCodexComposer"/);
+  assert.match(backgroundSource, /timed out waiting for Codex composer semantic controls/);
 
   const composer = submitCase.indexOf("const tab = await ensureCodexComposerTab()");
   const activate = submitCase.indexOf("await chrome.tabs.update(tab.id, { active: true })");
@@ -45,4 +50,20 @@ test("submission branch is resolved before Codex page navigation or prompt mutat
   const send = submitCase.indexOf("const result = await sendToTab(tab.id");
   assert.ok(branch >= 0 && branch < composer);
   assert.ok(composer < send);
+});
+
+
+test("composer readiness inspection is non-mutating and semantic", async () => {
+  const contentSource = await readFile(new URL("../extension/content.js", import.meta.url), "utf8");
+
+  assert.match(contentSource, /case "crossdock\.inspectCodexComposer": return inspectCodexComposer\(\)/);
+  const start = contentSource.indexOf("function inspectCodexComposer()");
+  const end = contentSource.indexOf("function inspectCodexTask()");
+  const inspection = contentSource.slice(start, end);
+
+  assert.match(inspection, /View all code environments/);
+  assert.match(inspection, /controls\.length === 1/);
+  assert.match(inspection, /controls\.length > 1/);
+  assert.doesNotMatch(inspection, /click\(/);
+  assert.doesNotMatch(inspection, /setEditableValue/);
 });
