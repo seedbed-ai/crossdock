@@ -14,6 +14,18 @@ test("background snapshots repository default branch and passes frozen provider 
   assert.match(backgroundSource, /crossdock\.submitCodex[\s\S]*targetRepository[\s\S]*targetBranch/);
 });
 
+test("background activates Codex before provider-context automation", () => {
+  const start = backgroundSource.indexOf('case "crossdock.submitCodex"');
+  const end = backgroundSource.indexOf('case "crossdock.inspectCodex"');
+  const submitCase = backgroundSource.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  const ensureTab = submitCase.indexOf("const tab = await ensureCodexTab()");
+  const activate = submitCase.indexOf("await chrome.tabs.update(tab.id, { active: true })");
+  const send = submitCase.indexOf("const result = await sendToTab(tab.id");
+  assert.ok(ensureTab >= 0 && ensureTab < activate);
+  assert.ok(activate < send);
+});
+
 test("Codex submission resolves repository and branch context before writing or clicking", () => {
   const start = contentSource.indexOf("async function submitCodexPrompt");
   const end = contentSource.indexOf("async function ensureCodexRepositoryContext");
