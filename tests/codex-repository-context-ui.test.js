@@ -88,7 +88,7 @@ test("branch confirmation re-resolves the live semantic selector after selection
   const end = contentSource.indexOf("function assertCodexRepositoryContext");
   const branchSelection = contentSource.slice(start, end);
   assert.ok(start >= 0 && end > start);
-  assert.match(branchSelection, /candidates\[0\]\.click\(\);[\s\S]*await waitFor\(\(\) => \{[\s\S]*const currentSelector = findUniqueSemanticButton\("Search for your branch"\)/);
+  assert.match(branchSelection, /candidate\.click\(\);[\s\S]*await waitFor\(\(\) => \{[\s\S]*const currentSelector = findUniqueSemanticButton\("Search for your branch"\)/);
   assert.match(branchSelection, /visibleText\(currentSelector\) === expected/);
   assert.match(branchSelection, /currentSelector\.getAttribute\("aria-expanded"\) !== "true"/);
   assert.doesNotMatch(branchSelection, /await waitFor\(\(\) => visibleText\(selector\) === expected/);
