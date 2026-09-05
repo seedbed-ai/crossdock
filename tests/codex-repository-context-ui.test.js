@@ -42,11 +42,13 @@ test("Codex submission resolves repository and branch context before writing or 
   assert.ok(submitReady < submitClick);
 });
 
-test("repository selection uses authenticated Codex semantic controls and exact repository text", () => {
+test("repository selection uses authenticated Codex semantic controls and human-readable environment fallback", () => {
   assert.match(contentSource, /View all code environments/);
   assert.match(contentSource, /waitForControlledDialog/);
   assert.match(contentSource, /exactVisibleButtonChoices\(dialog, targetRepository\)/);
-  assert.match(contentSource, /repository is not visible in the environment chooser/);
+  assert.match(contentSource, /exactVisibleButtonChoices\(dialog, repositoryName\)/);
+  assert.match(contentSource, /neither exact repository nor matching environment is visible/);
+  assert.match(contentSource, /matching environment choices/);
   assert.match(contentSource, /exact repository choices/);
 });
 
@@ -113,4 +115,18 @@ test("Codex submission waits boundedly for the semantic submit control to become
   const submit = contentSource.slice(start, end);
   assert.match(submit, /setEditableValue\(input, prompt\)[\s\S]*await waitForCodexSubmitButton\(5_000\)[\s\S]*submitButton\.click\(\)/);
   assert.match(contentSource, /async function waitForCodexSubmitButton\(timeoutMs\)[\s\S]*findCodexSubmitButton\(false\)[\s\S]*Codex submit control did not become ready after prompt entry/);
+});
+
+test("repository context accepts a selected environment matching the repository basename", () => {
+  const start = contentSource.indexOf("async function ensureCodexRepositoryContext");
+  const end = contentSource.indexOf("async function ensureCodexBranchContext");
+  const repositorySelection = contentSource.slice(start, end);
+  assert.match(repositorySelection, /const repositoryName = targetRepository\.split\("\/"\)\.at\(-1\)/);
+  assert.match(repositorySelection, /selectedContext === targetRepository \|\| selectedContext === repositoryName/);
+  assert.match(repositorySelection, /expectedSelection = repositoryName/);
+});
+
+test("repository environment fallback stays fail-closed on ambiguity", () => {
+  assert.match(contentSource, /environmentCandidates\.length > 1/);
+  assert.match(contentSource, /found \$\{environmentCandidates\.length\} matching environment choices/);
 });
