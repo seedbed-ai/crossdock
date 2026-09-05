@@ -5,7 +5,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
-const CODEX_CONTEXT_SELECTION_TIMEOUT_MS = 45_000;
+const CODEX_CONTEXT_SELECTION_TIMEOUT_MS = 120_000;
 
 async function handleMessage(message) {
   switch (message.type) {
