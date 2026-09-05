@@ -48,29 +48,40 @@ async function ensureCodexRepositoryContext(targetRepository) {
     throw new Error("target repository must be owner/repo");
   }
 
+  const repositoryName = targetRepository.split("/").at(-1);
   const selector = findUniqueSemanticButton("View all code environments");
-  if (visibleText(selector) === targetRepository) {
-    assertCodexRepositoryContext(targetRepository);
+  const selectedContext = visibleText(selector);
+  if (selectedContext === targetRepository || selectedContext === repositoryName) {
+    assertCodexRepositoryContext(targetRepository, repositoryName);
     return;
   }
 
   selector.click();
   const dialog = await waitForControlledDialog(selector, 5_000, "Codex environment chooser did not open");
-  const candidates = exactVisibleButtonChoices(dialog, targetRepository);
+  const repositoryCandidates = exactVisibleButtonChoices(dialog, targetRepository);
+  let candidates = repositoryCandidates;
+  let expectedSelection = targetRepository;
 
-  if (candidates.length === 0) {
-    throw new Error(`Codex repository context is unresolved for target ${targetRepository}; repository is not visible in the environment chooser`);
-  }
-  if (candidates.length > 1) {
-    throw new Error(`Codex repository context is ambiguous for target ${targetRepository}; found ${candidates.length} exact repository choices`);
+  if (repositoryCandidates.length === 0) {
+    const environmentCandidates = exactVisibleButtonChoices(dialog, repositoryName);
+    if (environmentCandidates.length === 0) {
+      throw new Error(`Codex repository context is unresolved for target ${targetRepository}; neither exact repository nor matching environment is visible in the environment chooser`);
+    }
+    if (environmentCandidates.length > 1) {
+      throw new Error(`Codex repository context is ambiguous for target ${targetRepository}; found ${environmentCandidates.length} matching environment choices`);
+    }
+    candidates = environmentCandidates;
+    expectedSelection = repositoryName;
+  } else if (repositoryCandidates.length > 1) {
+    throw new Error(`Codex repository context is ambiguous for target ${targetRepository}; found ${repositoryCandidates.length} exact repository choices`);
   }
 
   candidates[0].click();
   await waitFor(() => {
     const currentSelector = findUniqueSemanticButton("View all code environments");
-    return visibleText(currentSelector) === targetRepository && currentSelector.getAttribute("aria-expanded") !== "true";
+    return visibleText(currentSelector) === expectedSelection && currentSelector.getAttribute("aria-expanded") !== "true";
   }, CODEX_CONTEXT_SELECTION_TIMEOUT_MS, `Codex repository selection was not confirmed for target ${targetRepository}`);
-  assertCodexRepositoryContext(targetRepository);
+  assertCodexRepositoryContext(targetRepository, repositoryName);
 }
 
 async function ensureCodexBranchContext(targetBranch) {
@@ -101,14 +112,14 @@ async function ensureCodexBranchContext(targetBranch) {
   assertCodexBranchContext(expected);
 }
 
-function assertCodexRepositoryContext(targetRepository) {
+function assertCodexRepositoryContext(targetRepository, repositoryName = targetRepository.split("/").at(-1)) {
   if (typeof targetRepository !== "string" || !/^[^/\s]+\/[^/\s]+$/.test(targetRepository)) {
     throw new Error("target repository must be owner/repo");
   }
 
   const environmentButton = findUniqueSemanticButton("View all code environments");
   const selectedRepository = visibleText(environmentButton);
-  if (selectedRepository === targetRepository) return;
+  if (selectedRepository === targetRepository || selectedRepository === repositoryName) return;
 
   throw new Error(`Codex repository context does not match target ${targetRepository}; selected provider context: ${selectedRepository || "none"}`);
 }
