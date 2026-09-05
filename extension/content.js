@@ -97,16 +97,15 @@ async function ensureCodexBranchContext(targetBranch) {
 
   selector.click();
   const dialog = await waitForControlledDialog(selector, 5_000, "Codex branch chooser did not open");
-  const candidates = exactVisibleButtonChoices(dialog, expected);
+  const candidate = await waitForUniqueExactVisibleButtonChoice(
+    dialog,
+    expected,
+    5_000,
+    `Codex branch context is unresolved for target ${expected}; branch did not become visible in the branch chooser`,
+    `Codex branch context is ambiguous for target ${expected}`,
+  );
 
-  if (candidates.length === 0) {
-    throw new Error(`Codex branch context is unresolved for target ${expected}; branch is not visible in the branch chooser`);
-  }
-  if (candidates.length > 1) {
-    throw new Error(`Codex branch context is ambiguous for target ${expected}; found ${candidates.length} exact branch choices`);
-  }
-
-  candidates[0].click();
+  candidate.click();
   await waitFor(() => {
     const currentSelector = findUniqueSemanticButton("Search for your branch");
     return visibleText(currentSelector) === expected && currentSelector.getAttribute("aria-expanded") !== "true";
@@ -138,6 +137,17 @@ function exactVisibleButtonChoices(scope, expectedText) {
     .filter(isVisible)
     .filter(isEnabled)
     .filter((node) => visibleText(node) === expectedText);
+}
+
+async function waitForUniqueExactVisibleButtonChoice(scope, expectedText, timeoutMs, unresolvedMessage, ambiguousMessage) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const candidates = exactVisibleButtonChoices(scope, expectedText);
+    if (candidates.length > 1) throw new Error(`${ambiguousMessage}; found ${candidates.length} exact choices`);
+    if (candidates.length === 1) return candidates[0];
+    await sleep(50);
+  }
+  throw new Error(unresolvedMessage);
 }
 
 function findUniqueSemanticButton(ariaLabel) {
